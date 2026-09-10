@@ -1,1628 +1,1808 @@
-const $ = id => document.getElementById(id);
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    Form
+)
+
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from pathlib import Path
+
+import tempfile
+import json
+import datetime
+import os
 
 
-// =========================================================
-// SECURITE HTML
-// =========================================================
-
-function escapeHtml(value) {
-
-    return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
+from demo_provider import DemoProvider
+from ocr import extract_text, candidate_lines
+from models import analyze
 
 
-// =========================================================
-// NORMALISATION POURCENTAGE
-// =========================================================
+# =========================================================
+# CONFIGURATION
+# =========================================================
 
-function safePercent(value) {
+BASE = Path(
+    __file__
+).resolve().parent
 
-    const number = Number(value);
 
-    if (!Number.isFinite(number)) {
-        return 0;
-    }
+DB = (
+    BASE
+    / "data"
+    / "history.json"
+)
 
-    return Math.max(
+
+app = FastAPI(
+    title="FOOT PREDICT ANALYZER"
+)
+
+
+app.mount(
+    "/static",
+    StaticFiles(
+        directory=BASE
+    ),
+    name="static"
+)
+
+
+provider = DemoProvider()
+
+
+# =========================================================
+# HISTORIQUE
+# =========================================================
+
+def save_history(item: dict):
+
+    DB.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+
+    records = []
+
+
+    if DB.exists():
+
+        try:
+
+            records = json.loads(
+
+                DB.read_text(
+                    encoding="utf-8"
+                )
+
+            )
+
+        except Exception:
+
+            records = []
+
+
+    item["saved_at"] = (
+
+        datetime.datetime
+        .utcnow()
+        .isoformat()
+
+        + "Z"
+
+    )
+
+
+    records.insert(
         0,
-        Math.min(
-            100,
-            number
+        item
+    )
+
+
+    DB.write_text(
+
+        json.dumps(
+
+            records[:100],
+
+            ensure_ascii=False,
+
+            indent=2
+
+        ),
+
+        encoding="utf-8"
+
+    )
+
+
+def get_history():
+
+    if not DB.exists():
+
+        return []
+
+
+    try:
+
+        return json.loads(
+
+            DB.read_text(
+                encoding="utf-8"
+            )
+
         )
-    );
-}
+
+    except Exception:
+
+        return []
 
 
-// =========================================================
-// AFFICHAGE DES LIGNES
-// =========================================================
+# =========================================================
+# OUTILS NUMERIQUES
+# =========================================================
 
-function rows(id, arr) {
+def get_number(
+    data,
+    *keys,
+    default=0
+):
 
-    const el = $(id);
+    """
+    Cherche une valeur numérique
+    avec plusieurs noms de clés possibles.
+    """
 
-    if (!el) {
-        return;
+    if not isinstance(
+        data,
+        dict
+    ):
+
+        return default
+
+
+    for key in keys:
+
+        if key in data:
+
+            value = data.get(
+                key
+            )
+
+
+            try:
+
+                return float(
+                    value
+                )
+
+            except (
+                TypeError,
+                ValueError
+            ):
+
+                pass
+
+
+    return default
+
+
+def probability(value):
+
+    """
+    Normalise une probabilité.
+
+    Accepte :
+    0.72
+    ou
+    72
+    """
+
+    try:
+
+        value = float(
+            value
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return 0
+
+
+    if value <= 1:
+
+        value *= 100
+
+
+    return max(
+
+        0,
+
+        min(
+
+            100,
+
+            round(
+                value,
+                1
+            )
+
+        )
+
+    )
+
+
+# =========================================================
+# EXTRACTION RESULTAT 1X2
+# =========================================================
+
+def extract_result_data(result):
+
+    """
+    Le moteur peut retourner :
+
+    {
+        "result": {
+            "home_win": ...,
+            "draw": ...,
+            "away_win": ...
+        }
     }
 
-    if (!Array.isArray(arr)) {
+    ou directement :
 
-        el.innerHTML = "";
-
-        return;
+    {
+        "home_win": ...,
+        "draw": ...,
+        "away_win": ...
     }
+    """
+
+    if not isinstance(
+        result,
+        dict
+    ):
+
+        return {}
 
 
-    el.innerHTML = arr.map(item => {
+    nested = result.get(
+        "result"
+    )
 
-        if (
-            item !== null
-            &&
-            typeof item === "object"
-        ) {
 
-            return `
-                <div class="row">
-                    ${escapeHtml(
-                        JSON.stringify(item)
-                    )}
-                </div>
-            `;
+    if isinstance(
+        nested,
+        dict
+    ):
+
+        return nested
+
+
+    return result
+
+
+# =========================================================
+# RECOMMANDATION RESULTAT
+# =========================================================
+
+def build_main_prediction(
+
+    home,
+
+    away,
+
+    home_win,
+
+    draw,
+
+    away_win
+
+):
+
+    home_win = probability(
+        home_win
+    )
+
+    draw = probability(
+        draw
+    )
+
+    away_win = probability(
+        away_win
+    )
+
+
+    home_or_draw = round(
+
+        home_win
+        +
+        draw,
+
+        1
+
+    )
+
+
+    away_or_draw = round(
+
+        away_win
+        +
+        draw,
+
+        1
+
+    )
+
+
+    difference = abs(
+
+        home_win
+        -
+        away_win
+
+    )
+
+
+    # =====================================================
+    # FAVORI DOMICILE
+    # =====================================================
+
+    if (
+
+        home_win >= 60
+
+        and
+
+        difference >= 15
+
+    ):
+
+        return {
+
+            "type": "victoire",
+
+            "market": "1",
+
+            "label":
+                f"Victoire probable : {home}",
+
+            "confidence":
+                home_win,
+
+            "alternative":
+                "1X",
+
+            "alternative_label":
+                f"Double chance {home} ou Nul"
+
         }
 
 
-        return `
-            <div class="row">
-                ${escapeHtml(item)}
-            </div>
-        `;
+    # =====================================================
+    # FAVORI EXTERIEUR
+    # =====================================================
 
-    }).join("");
+    if (
 
-}
+        away_win >= 60
 
+        and
 
-// =========================================================
-// CREATION CARTE VERDICT
-// =========================================================
+        difference >= 15
 
-function verdictCard(
-    title,
-    icon,
-    content
-) {
+    ):
 
-    return `
+        return {
 
-        <div class="verdict-card">
+            "type": "victoire",
 
-            <div class="verdict-title">
+            "market": "2",
 
-                <span class="verdict-icon">
-                    ${icon}
-                </span>
+            "label":
+                f"Victoire probable : {away}",
 
-                <strong>
-                    ${escapeHtml(title)}
-                </strong>
+            "confidence":
+                away_win,
 
-            </div>
+            "alternative":
+                "X2",
+
+            "alternative_label":
+                f"Double chance Nul ou {away}"
+
+        }
 
 
-            <div class="verdict-content">
+    # =====================================================
+    # DOUBLE CHANCE DOMICILE
+    # =====================================================
 
-                ${content}
+    if (
 
-            </div>
+        home_or_draw >= away_or_draw
 
-        </div>
+        and
 
-    `;
-}
+        home_or_draw >= 65
 
+    ):
 
-// =========================================================
-// AFFICHAGE DU VERDICT
-// =========================================================
+        return {
 
-function renderVerdict(verdict) {
+            "type":
+                "double_chance",
 
-    if (!verdict) {
-        return "";
-    }
+            "market":
+                "1X",
 
+            "label":
+                f"Double chance : {home} ou Nul",
 
-    let html = "";
+            "confidence":
+                home_or_draw,
 
+            "alternative":
+                "1",
 
-    // =====================================================
-    // PRONOSTIC PRINCIPAL
-    // =====================================================
+            "alternative_label":
+                f"Victoire directe {home}"
 
-    const main =
-        verdict.main_prediction;
-
-
-    if (main) {
-
-        html += verdictCard(
-
-            "Recommandation principale",
-
-            "🏆",
-
-            `
-
-            <div class="verdict-main">
-
-                <h3>
-                    ${escapeHtml(
-                        main.label
-                    )}
-                </h3>
+        }
 
 
-                <div class="probability">
+    # =====================================================
+    # DOUBLE CHANCE EXTERIEUR
+    # =====================================================
 
-                    Confiance :
+    if (
 
-                    <strong>
-                        ${escapeHtml(
-                            main.confidence
-                        )}%
-                    </strong>
+        away_or_draw > home_or_draw
 
-                </div>
+        and
+
+        away_or_draw >= 65
+
+    ):
+
+        return {
+
+            "type":
+                "double_chance",
+
+            "market":
+                "X2",
+
+            "label":
+                f"Double chance : Nul ou {away}",
+
+            "confidence":
+                away_or_draw,
+
+            "alternative":
+                "2",
+
+            "alternative_label":
+                f"Victoire directe {away}"
+
+        }
 
 
-                <div class="market">
+    # =====================================================
+    # MATCH INCERTAIN
+    # =====================================================
 
-                    Marché :
+    return {
 
-                    <strong>
-                        ${escapeHtml(
-                            main.market
-                        )}
-                    </strong>
+        "type":
+            "incertain",
 
-                </div>
+        "market":
+            "aucun",
 
+        "label":
+            "Match trop équilibré pour un choix fort",
 
-                <hr>
+        "confidence":
+            max(
+                home_win,
+                draw,
+                away_win
+            ),
 
+        "alternative":
+            "prudence",
 
-                <div class="alternative">
-
-                    Alternative :
-
-                    <strong>
-                        ${escapeHtml(
-                            main.alternative
-                        )}
-                    </strong>
-
-                    <br>
-
-                    ${escapeHtml(
-                        main.alternative_label
-                    )}
-
-                </div>
-
-            </div>
-
-            `
-        );
+        "alternative_label":
+            (
+                "Aucun marché principal "
+                "fortement recommandé"
+            )
 
     }
 
 
-    // =====================================================
-    // HANDICAP
-    // =====================================================
+# =========================================================
+# HANDICAP
+# =========================================================
 
-    const handicap =
-        verdict.handicap;
+def build_handicap(
 
+    home,
 
-    if (handicap) {
+    away,
 
-        html += verdictCard(
+    home_win,
 
-            "Handicap",
+    away_win
 
-            handicap.recommended
-                ? "📊"
-                : "⚠️",
+):
 
-            `
+    home_win = probability(
+        home_win
+    )
 
-            <h3>
-                ${escapeHtml(
-                    handicap.label
-                )}
-            </h3>
-
-            <p>
-                ${escapeHtml(
-                    handicap.description
-                )}
-            </p>
-
-            `
-        );
-
-    }
+    away_win = probability(
+        away_win
+    )
 
 
-    // =====================================================
-    // MATCH SERRE
-    // =====================================================
+    difference = (
 
-    const tightness =
-        verdict.match_tightness;
+        home_win
+        -
+        away_win
 
-
-    if (tightness) {
-
-        html += verdictCard(
-
-            "Analyse du match",
-
-            tightness.icon || "⚔️",
-
-            `
-
-            <h3>
-                ${escapeHtml(
-                    tightness.label
-                )}
-            </h3>
-
-            <p>
-                ${escapeHtml(
-                    tightness.description
-                )}
-            </p>
-
-            `
-        );
-
-    }
+    )
 
 
-    // =====================================================
-    // AGRESSIVITE DOMICILE
-    // =====================================================
+    if difference >= 30:
 
-    const homeAggression =
-        verdict.home_aggression;
+        return {
 
+            "recommended":
+                True,
 
-    if (homeAggression) {
+            "label":
+                f"{home} -1",
 
-        html += verdictCard(
-
-            `Profil offensif : ${
-                escapeHtml(
-                    homeAggression.team
+            "description":
+                (
+                    f"{home} est nettement "
+                    "supérieur sur le modèle"
                 )
-            }`,
 
-            homeAggression.icon || "🔥",
-
-            `
-
-            <h3>
-
-                ${escapeHtml(
-                    homeAggression.label
-                )}
-
-            </h3>
+        }
 
 
-            <div class="probability">
+    if difference >= 20:
 
-                Intensité offensive :
+        return {
 
-                <strong>
+            "recommended":
+                True,
 
-                    ${escapeHtml(
-                        homeAggression.score
-                    )}/100
+            "label":
+                f"{home} -0.5",
 
-                </strong>
-
-            </div>
-
-
-            <p>
-
-                ${escapeHtml(
-                    homeAggression.description
-                )}
-
-            </p>
-
-            `
-        );
-
-    }
-
-
-    // =====================================================
-    // AGRESSIVITE EXTERIEUR
-    // =====================================================
-
-    const awayAggression =
-        verdict.away_aggression;
-
-
-    if (awayAggression) {
-
-        html += verdictCard(
-
-            `Profil offensif : ${
-                escapeHtml(
-                    awayAggression.team
+            "description":
+                (
+                    f"Avantage attendu pour "
+                    f"{home}"
                 )
-            }`,
 
-            awayAggression.icon || "🔥",
-
-            `
-
-            <h3>
-
-                ${escapeHtml(
-                    awayAggression.label
-                )}
-
-            </h3>
+        }
 
 
-            <div class="probability">
+    if difference <= -30:
 
-                Intensité offensive :
+        return {
 
-                <strong>
+            "recommended":
+                True,
 
-                    ${escapeHtml(
-                        awayAggression.score
-                    )}/100
+            "label":
+                f"{away} -1",
 
-                </strong>
+            "description":
+                (
+                    f"{away} est nettement "
+                    "supérieur sur le modèle"
+                )
 
-            </div>
-
-
-            <p>
-
-                ${escapeHtml(
-                    awayAggression.description
-                )}
-
-            </p>
-
-            `
-        );
-
-    }
+        }
 
 
-    // =====================================================
-    // PREMIER BUT
-    // =====================================================
+    if difference <= -20:
 
-    const firstGoal =
-        verdict.first_goal;
+        return {
 
+            "recommended":
+                True,
 
-    if (firstGoal) {
+            "label":
+                f"{away} -0.5",
 
-        html += verdictCard(
+            "description":
+                (
+                    f"Avantage attendu pour "
+                    f"{away}"
+                )
 
-            "Timing du premier but",
-
-            firstGoal.icon || "⚽",
-
-            `
-
-            <h3>
-
-                ${escapeHtml(
-                    firstGoal.label
-                )}
-
-            </h3>
+        }
 
 
-            <p>
+    return {
 
-                ${escapeHtml(
-                    firstGoal.description
-                )}
+        "recommended":
+            False,
 
-            </p>
+        "label":
+            "Handicap non recommandé",
 
-            `
-        );
+        "description":
+            (
+                "Les forces semblent trop proches"
+            )
 
     }
 
 
-    // =====================================================
-    // PROBABILITES 1X2
-    // =====================================================
+# =========================================================
+# MATCH SERRE
+# =========================================================
 
-    const probabilities =
-        verdict.probabilities;
+def build_match_tightness(
 
+    home_win,
 
-    if (probabilities) {
+    draw,
 
-        html += verdictCard(
+    away_win
 
-            "Probabilités 1X2",
+):
 
-            "📈",
+    home_win = probability(
+        home_win
+    )
 
-            `
+    draw = probability(
+        draw
+    )
 
-            <div class="probability-row">
-
-                <div>
-
-                    Domicile :
-
-                    <strong>
-
-                        ${escapeHtml(
-                            probabilities.home_win
-                        )}%
-
-                    </strong>
-
-                </div>
+    away_win = probability(
+        away_win
+    )
 
 
-                <div>
+    difference = abs(
 
-                    Nul :
+        home_win
+        -
+        away_win
 
-                    <strong>
-
-                        ${escapeHtml(
-                            probabilities.draw
-                        )}%
-
-                    </strong>
-
-                </div>
+    )
 
 
-                <div>
+    if difference <= 8:
 
-                    Extérieur :
+        return {
 
-                    <strong>
+            "level":
+                "très_serré",
 
-                        ${escapeHtml(
-                            probabilities.away_win
-                        )}%
+            "label":
+                "Match très serré",
 
-                    </strong>
+            "description":
+                (
+                    "Les deux équipes présentent "
+                    "des chances de victoire très proches."
+                ),
 
-                </div>
+            "icon":
+                "⚔️"
 
-            </div>
-
-            `
-        );
-
-    }
-
-
-    // =====================================================
-    // BUTS ATTENDUS
-    // =====================================================
-
-    const expectedGoals =
-        verdict.expected_goals;
+        }
 
 
-    if (expectedGoals) {
+    if difference <= 15:
 
-        html += verdictCard(
+        return {
 
-            "Buts attendus",
+            "level":
+                "serré",
 
-            "⚽",
+            "label":
+                "Match disputé",
 
-            `
+            "description":
+                (
+                    "Rencontre équilibrée "
+                    "avec un léger avantage."
+                ),
 
-            <div class="goals-row">
+            "icon":
+                "⚖️"
 
-                <div>
-
-                    Domicile :
-
-                    <strong>
-
-                        ${escapeHtml(
-                            expectedGoals.home
-                        )}
-
-                    </strong>
-
-                </div>
+        }
 
 
-                <div>
+    if difference <= 25:
 
-                    Extérieur :
+        return {
 
-                    <strong>
+            "level":
+                "avantage_modéré",
 
-                        ${escapeHtml(
-                            expectedGoals.away
-                        )}
+            "label":
+                "Avantage modéré",
 
-                    </strong>
+            "description":
+                (
+                    "Une équipe possède un avantage "
+                    "mais le match reste compétitif."
+                ),
 
-                </div>
+            "icon":
+                "📈"
+
+        }
 
 
-                <div>
+    return {
 
-                    Total :
+        "level":
+            "domination",
 
-                    <strong>
+        "label":
+            "Domination attendue",
 
-                        ${escapeHtml(
-                            expectedGoals.total
-                        )}
+        "description":
+            (
+                "Une équipe possède un avantage "
+                "statistique important."
+            ),
 
-                    </strong>
-
-                </div>
-
-            </div>
-
-            `
-        );
+        "icon":
+            "👑"
 
     }
 
 
-    return html;
+# =========================================================
+# AGRESSIVITE OFFENSIVE
+# =========================================================
 
-}
+def classify_aggressiveness(
+
+    team_expected_goals,
+
+    total_expected_goals
+
+):
+
+    try:
+
+        team_expected_goals = float(
+            team_expected_goals
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        team_expected_goals = 0
 
 
-// =========================================================
-// AFFICHAGE RESULTAT 1X2
-// =========================================================
+    try:
 
-function renderResult(analysis) {
+        total_expected_goals = float(
+            total_expected_goals
+        )
 
-    const result =
-        analysis?.result;
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        total_expected_goals = 0
 
 
-    if (!result) {
-        return "";
+    score = min(
+
+        100,
+
+        round(
+            team_expected_goals * 40
+        )
+
+    )
+
+
+    if total_expected_goals >= 3.5:
+
+        score += 10
+
+
+    elif total_expected_goals <= 1.8:
+
+        score -= 10
+
+
+    score = max(
+
+        0,
+
+        min(
+            100,
+            score
+        )
+
+    )
+
+
+    if score >= 80:
+
+        return {
+
+            "score":
+                score,
+
+            "level":
+                "très_agressive",
+
+            "label":
+                "Très agressive",
+
+            "description":
+                "Forte pression offensive attendue.",
+
+            "icon":
+                "🔥"
+
+        }
+
+
+    if score >= 60:
+
+        return {
+
+            "score":
+                score,
+
+            "level":
+                "offensive",
+
+            "label":
+                "Offensive",
+
+            "description":
+                "Équipe portée vers l'attaque.",
+
+            "icon":
+                "⚡"
+
+        }
+
+
+    if score >= 40:
+
+        return {
+
+            "score":
+                score,
+
+            "level":
+                "équilibrée",
+
+            "label":
+                "Équilibrée",
+
+            "description":
+                (
+                    "Bon équilibre entre attaque "
+                    "et contrôle."
+                ),
+
+            "icon":
+                "⚖️"
+
+        }
+
+
+    if score >= 20:
+
+        return {
+
+            "score":
+                score,
+
+            "level":
+                "prudente",
+
+            "label":
+                "Prudente",
+
+            "description":
+                (
+                    "Approche offensive mesurée."
+                ),
+
+            "icon":
+                "🛡️"
+
+        }
+
+
+    return {
+
+        "score":
+            score,
+
+        "level":
+            "défensive",
+
+        "label":
+            "Très prudente",
+
+        "description":
+            (
+                "Faible intensité offensive attendue."
+            ),
+
+        "icon":
+            "🧱"
+
     }
 
 
-    const homeWin =
-        safePercent(
-            result.home_win
-        );
+# =========================================================
+# TIMING DU PREMIER BUT
+# =========================================================
+
+def build_first_goal_timing(
+
+    total_expected_goals
+
+):
+
+    try:
+
+        total_expected_goals = float(
+            total_expected_goals
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        total_expected_goals = 0
 
 
-    const draw =
-        safePercent(
-            result.draw
-        );
+    if total_expected_goals >= 3.5:
+
+        return {
+
+            "timing":
+                "précoce",
+
+            "label":
+                "Début de match explosif",
+
+            "description":
+                (
+                    "Ouverture du score "
+                    "potentiellement rapide."
+                ),
+
+            "icon":
+                "⚡"
+
+        }
 
 
-    const awayWin =
-        safePercent(
-            result.away_win
-        );
+    if total_expected_goals >= 2.7:
+
+        return {
+
+            "timing":
+                "assez_rapide",
+
+            "label":
+                (
+                    "Ouverture du score attendue "
+                    "relativement tôt"
+                ),
+
+            "description":
+                (
+                    "Le rythme offensif pourrait "
+                    "produire un but dans la première "
+                    "partie du match."
+                ),
+
+            "icon":
+                "🟡"
+
+        }
 
 
-    return `
+    if total_expected_goals >= 2.1:
 
-        <div class="row">
+        return {
 
-            <div class="top">
+            "timing":
+                "normal",
 
-                <span>
-                    Victoire domicile
-                </span>
+            "label":
+                (
+                    "Rythme d'ouverture du score normal"
+                ),
 
-                <strong>
-                    ${homeWin}%
-                </strong>
+            "description":
+                (
+                    "Le premier but est attendu "
+                    "selon un scénario de match classique."
+                ),
 
-            </div>
+            "icon":
+                "⚖️"
 
-            <div class="bar">
-
-                <div
-                    class="fill"
-                    style="width:${homeWin}%"
-                ></div>
-
-            </div>
-
-        </div>
+        }
 
 
-        <div class="row">
+    if total_expected_goals >= 1.5:
 
-            <div class="top">
+        return {
 
-                <span>
-                    Match nul
-                </span>
+            "timing":
+                "tardif",
 
-                <strong>
-                    ${draw}%
-                </strong>
+            "label":
+                (
+                    "Ouverture du score "
+                    "potentiellement tardive"
+                ),
 
-            </div>
+            "description":
+                (
+                    "Le match pourrait mettre du temps "
+                    "à se débloquer."
+                ),
 
-            <div class="bar">
+            "icon":
+                "🟠"
 
-                <div
-                    class="fill"
-                    style="width:${draw}%"
-                ></div>
-
-            </div>
-
-        </div>
-
-
-        <div class="row">
-
-            <div class="top">
-
-                <span>
-                    Victoire extérieur
-                </span>
-
-                <strong>
-                    ${awayWin}%
-                </strong>
-
-            </div>
-
-            <div class="bar">
-
-                <div
-                    class="fill"
-                    style="width:${awayWin}%"
-                ></div>
-
-            </div>
-
-        </div>
-
-    `;
-
-}
+        }
 
 
-// =========================================================
-// AFFICHAGE BUTS
-// =========================================================
+    return {
 
-function renderGoals(analysis) {
+        "timing":
+            "très_tardif",
 
-    const goals =
-        analysis?.goals;
+        "label":
+            "Début de match fermé",
 
+        "description":
+            (
+                "Risque élevé d'une ouverture "
+                "du score tardive."
+            ),
 
-    if (!goals) {
-        return "";
+        "icon":
+            "🔒"
+
     }
 
 
-    return `
+# =========================================================
+# CONSTRUCTION DU VERDICT
+# =========================================================
 
-        <div class="pill">
+def build_verdict(
 
-            Over 1.5 :
-            ${escapeHtml(
-                goals.over_1_5
-            )}%
+    result,
 
-        </div>
+    home,
 
+    away
 
-        <div class="pill">
+):
 
-            Over 2.5 :
-            ${escapeHtml(
-                goals.over_2_5
-            )}%
-
-        </div>
+    """
+    Transforme les résultats de models.py
+    en verdict exploitable par app.js.
+    """
 
 
-        <div class="pill">
+    if not isinstance(
+        result,
+        dict
+    ):
 
-            Under 3.5 :
-            ${escapeHtml(
-                goals.under_3_5
-            )}%
-
-        </div>
+        result = {}
 
 
-        <div class="pill">
+    # =====================================================
+    # EXTRACTION DU RESULTAT 1X2
+    # =====================================================
 
-            BTTS Oui :
-            ${escapeHtml(
-                goals.btts_yes
-            )}%
-
-        </div>
-
-    `;
-
-}
+    result_data = extract_result_data(
+        result
+    )
 
 
-// =========================================================
-// AFFICHAGE CORNERS
-// =========================================================
+    home_win = get_number(
 
-function renderCorners(analysis) {
+        result_data,
 
-    const corners =
-        analysis?.corners;
+        "home_win",
+
+        "home",
+
+        "p_home",
+
+        default=0
+
+    )
 
 
-    if (!corners) {
-        return "";
+    draw = get_number(
+
+        result_data,
+
+        "draw",
+
+        "p_draw",
+
+        default=0
+
+    )
+
+
+    away_win = get_number(
+
+        result_data,
+
+        "away_win",
+
+        "away",
+
+        "p_away",
+
+        default=0
+
+    )
+
+
+    # =====================================================
+    # DONNEES ATTENDUES
+    # =====================================================
+
+    expected = result.get(
+        "expected",
+        {}
+    )
+
+
+    if not isinstance(
+        expected,
+        dict
+    ):
+
+        expected = {}
+
+
+    total_expected_goals = get_number(
+
+        expected,
+
+        "total_goals",
+
+        "goals",
+
+        "total",
+
+        default=0
+
+    )
+
+
+    home_expected_goals = get_number(
+
+        expected,
+
+        "home_goals",
+
+        "home",
+
+        default=0
+
+    )
+
+
+    away_expected_goals = get_number(
+
+        expected,
+
+        "away_goals",
+
+        "away",
+
+        default=0
+
+    )
+
+
+    # =====================================================
+    # CALCUL DU TOTAL SI NECESSAIRE
+    # =====================================================
+
+    if (
+
+        total_expected_goals == 0
+
+        and
+
+        (
+            home_expected_goals > 0
+            or
+            away_expected_goals > 0
+        )
+
+    ):
+
+        total_expected_goals = (
+
+            home_expected_goals
+            +
+            away_expected_goals
+
+        )
+
+
+    # =====================================================
+    # REPARTITION DES BUTS SI NECESSAIRE
+    # =====================================================
+
+    if (
+
+        home_expected_goals == 0
+
+        and
+
+        away_expected_goals == 0
+
+        and
+
+        total_expected_goals > 0
+
+    ):
+
+        total_strength = (
+
+            home_win
+            +
+            away_win
+
+        )
+
+
+        if total_strength > 0:
+
+            home_expected_goals = (
+
+                total_expected_goals
+
+                *
+
+                home_win
+
+                /
+
+                total_strength
+
+            )
+
+
+            away_expected_goals = (
+
+                total_expected_goals
+
+                *
+
+                away_win
+
+                /
+
+                total_strength
+
+            )
+
+
+        else:
+
+            home_expected_goals = (
+
+                total_expected_goals
+                /
+                2
+
+            )
+
+
+            away_expected_goals = (
+
+                total_expected_goals
+                /
+                2
+
+            )
+
+
+    # =====================================================
+    # CREATION DU VERDICT
+    # =====================================================
+
+    main_prediction = build_main_prediction(
+
+        home,
+
+        away,
+
+        home_win,
+
+        draw,
+
+        away_win
+
+    )
+
+
+    handicap = build_handicap(
+
+        home,
+
+        away,
+
+        home_win,
+
+        away_win
+
+    )
+
+
+    tightness = build_match_tightness(
+
+        home_win,
+
+        draw,
+
+        away_win
+
+    )
+
+
+    home_aggression = (
+        classify_aggressiveness(
+
+            home_expected_goals,
+
+            total_expected_goals
+
+        )
+    )
+
+
+    away_aggression = (
+        classify_aggressiveness(
+
+            away_expected_goals,
+
+            total_expected_goals
+
+        )
+    )
+
+
+    first_goal = (
+        build_first_goal_timing(
+
+            total_expected_goals
+
+        )
+    )
+
+
+    return {
+
+        "main_prediction":
+            main_prediction,
+
+
+        "handicap":
+            handicap,
+
+
+        "confidence":
+            main_prediction["confidence"],
+
+
+        "match_tightness":
+            tightness,
+
+
+        "home_aggression": {
+
+            "team":
+                home,
+
+            **home_aggression
+
+        },
+
+
+        "away_aggression": {
+
+            "team":
+                away,
+
+            **away_aggression
+
+        },
+
+
+        "first_goal":
+            first_goal,
+
+
+        "probabilities": {
+
+            "home_win":
+                probability(
+                    home_win
+                ),
+
+            "draw":
+                probability(
+                    draw
+                ),
+
+            "away_win":
+                probability(
+                    away_win
+                )
+
+        },
+
+
+        "expected_goals": {
+
+            "home":
+                round(
+                    home_expected_goals,
+                    2
+                ),
+
+            "away":
+                round(
+                    away_expected_goals,
+                    2
+                ),
+
+            "total":
+                round(
+                    total_expected_goals,
+                    2
+                )
+
+        }
+
     }
 
 
-    return `
+# =========================================================
+# PAGE ACCUEIL
+# =========================================================
 
-        <div class="pill">
+@app.get("/")
+def home():
 
-            Over 7.5 :
-            ${escapeHtml(
-                corners.over_7_5
-            )}%
+    return FileResponse(
 
-        </div>
+        BASE
+        /
+        "index.html"
 
+    )
 
-        <div class="pill">
 
-            Over 8.5 :
-            ${escapeHtml(
-                corners.over_8_5
-            )}%
+# =========================================================
+# API HISTORIQUE
+# =========================================================
 
-        </div>
+@app.get("/api/history")
+def history():
 
+    return get_history()
 
-        <div class="pill">
 
-            Over 9.5 :
-            ${escapeHtml(
-                corners.over_9_5
-            )}%
+# =========================================================
+# LECTURE CAPTURE OCR
+# =========================================================
 
-        </div>
+@app.post("/api/read-capture")
+async def read_capture(
 
-    `;
+    screenshot: UploadFile = File(...)
 
-}
+):
 
+    suffix = Path(
 
-// =========================================================
-// AFFICHAGE SCORES EXACTS
-// =========================================================
+        screenshot.filename
+        or
+        "capture.png"
 
-function renderScores(analysis) {
+    ).suffix or ".png"
 
-    const scores =
-        analysis?.exact_scores;
 
+    path = None
 
-    if (!Array.isArray(scores)) {
-        return "";
-    }
 
+    try:
 
-    return scores.map(item => `
+        with tempfile.NamedTemporaryFile(
 
-        <div class="score">
+            delete=False,
 
-            <strong>
+            suffix=suffix
 
-                ${escapeHtml(
-                    item.score
-                )}
+        ) as f:
 
-            </strong>
+            f.write(
 
+                await screenshot.read()
 
-            <span>
+            )
 
-                ${escapeHtml(
-                    item.probability
-                )}%
 
-            </span>
+            path = f.name
 
-        </div>
 
-    `).join("");
+        text = extract_text(
+            path
+        )
 
-}
 
+        return {
 
-// =========================================================
-// AFFICHAGE DONNEES ATTENDUES
-// =========================================================
+            "filename":
+                screenshot.filename,
 
-function renderExpected(analysis) {
+            "ocr_text":
+                text,
 
-    const expected =
-        analysis?.expected;
+            "candidate_lines":
+                candidate_lines(
+                    text
+                )[:20],
 
+            "note":
+                (
+                    "Confirme toujours les équipes "
+                    "avant l'analyse."
+                )
 
-    if (!expected) {
-        return "";
-    }
+        }
 
 
-    return `
+    finally:
 
-        <div class="row">
+        if path:
 
-            <strong>
-                Buts domicile :
-            </strong>
+            try:
 
-            ${escapeHtml(
-                expected.home_goals
-            )}
+                os.unlink(
+                    path
+                )
 
-        </div>
+            except Exception:
 
+                pass
 
-        <div class="row">
 
-            <strong>
-                Buts extérieur :
-            </strong>
+# =========================================================
+# ANALYSE DU MATCH
+# =========================================================
 
-            ${escapeHtml(
-                expected.away_goals
-            )}
+@app.post("/api/analyze")
+async def api_analyze(
 
-        </div>
+    home: str = Form(...),
 
+    away: str = Form(...),
 
-        <div class="row">
+    competition: str = Form("")
 
-            <strong>
-                Total buts :
-            </strong>
+):
 
-            ${escapeHtml(
-                expected.total_goals
-            )}
 
-        </div>
+    # =====================================================
+    # NETTOYAGE
+    # =====================================================
 
+    home = home.strip()
 
-        <div class="row">
+    away = away.strip()
 
-            <strong>
-                Total corners :
-            </strong>
+    competition = competition.strip()
 
-            ${escapeHtml(
-                expected.total_corners
-            )}
 
-        </div>
+    # =====================================================
+    # VERIFICATION
+    # =====================================================
 
-    `;
+    if not home or not away:
 
-}
+        return {
 
+            "error":
+                "Les deux équipes sont obligatoires."
 
-// =========================================================
-// AFFICHAGE DES SOURCES
-// =========================================================
+        }
 
-function renderSources(sources) {
 
-    if (!Array.isArray(sources)) {
-        return "";
-    }
+    # =====================================================
+    # DONNEES DU FOURNISSEUR
+    # =====================================================
 
+    raw = await provider.get_match_context(
 
-    return sources.map(source => `
+        home,
 
-        <div class="source">
+        away,
 
-            <strong>
+        competition
 
-                ${escapeHtml(
-                    source.name
-                )}
+    )
 
-            </strong>
 
-            <br>
+    # =====================================================
+    # MOTEUR D'ANALYSE
+    # =====================================================
 
-            ${escapeHtml(
-                source.status
-            )}
+    result = analyze(
 
-        </div>
+        raw,
 
-    `).join("");
+        home,
 
-}
+        away
 
+    )
 
-// =========================================================
-// OCR / LECTURE CAPTURE
-// =========================================================
 
-const readBtn =
-    $("readBtn");
+    # =====================================================
+    # VERDICT
+    # =====================================================
 
+    verdict = build_verdict(
 
-if (readBtn) {
+        result,
 
-    readBtn.onclick =
-        async () => {
+        home,
 
-            const file =
-                $("file")?.files[0];
+        away
 
+    )
 
-            if (!file) {
 
-                alert(
-                    "Choisis une capture d'écran."
-                );
+    # =====================================================
+    # RESULTAT FINAL
+    # =====================================================
 
-                return;
+    payload = {
+
+        "match": {
+
+            "home":
+                home,
+
+            "away":
+                away,
+
+            "competition":
+
+                competition
+
+                or
+
+                "Non précisée"
+
+        },
+
+
+        "provider_data":
+            raw,
+
+
+        "analysis":
+            result,
+
+
+        "verdict":
+            verdict,
+
+
+        "sources": [
+
+            {
+
+                "name":
+                    "Adaptateur de données",
+
+                "status":
+                    (
+                        "Architecture prête pour "
+                        "API autorisées"
+                    )
+
+            },
+
+
+            {
+
+                "name":
+                    "OCR / capture",
+
+                "status":
+                    "Module optionnel"
+
+            },
+
+
+            {
+
+                "name":
+                    "Moteur statistique",
+
+                "status":
+                    "Poisson + pondération"
 
             }
 
+        ],
 
-            const formData =
-                new FormData();
 
+        "disclaimer":
 
-            formData.append(
-                "screenshot",
-                file
-            );
+            (
+                "Les résultats sont des estimations "
+                "probabilistes et non des garanties."
+            )
 
+    }
 
-            const ocrBox =
-                $("ocrBox");
 
+    # =====================================================
+    # SAUVEGARDE HISTORIQUE
+    # =====================================================
 
-            if (ocrBox) {
+    save_history(
+        payload
+    )
 
-                ocrBox.classList.remove(
-                    "hidden"
-                );
 
-                ocrBox.textContent =
-                    "🔎 Lecture de la capture...";
-
-            }
-
-
-            try {
-
-                const response =
-                    await fetch(
-
-                        "/api/read-capture",
-
-                        {
-
-                            method: "POST",
-
-                            body: formData
-
-                        }
-
-                    );
-
-
-                if (!response.ok) {
-
-                    throw new Error(
-                        "Erreur OCR"
-                    );
-
-                }
-
-
-                const data =
-                    await response.json();
-
-
-                if (ocrBox) {
-
-                    ocrBox.textContent =
-
-                        data.ocr_text
-
-                        ||
-
-                        "Aucun texte détecté.";
-
-                }
-
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    error
-                );
-
-
-                if (ocrBox) {
-
-                    ocrBox.textContent =
-
-                        "❌ Erreur pendant la lecture.";
-
-                }
-
-            }
-
-        };
-
-}
-
-
-// =========================================================
-// ANALYSE DU MATCH
-// =========================================================
-
-const form =
-    $("form");
-
-
-if (form) {
-
-    form.onsubmit =
-        async event => {
-
-            event.preventDefault();
-
-
-            // =================================================
-            // LOADING
-            // =================================================
-
-            $("loading")
-                ?.classList
-                .remove("hidden");
-
-
-            $("report")
-                ?.classList
-                .add("hidden");
-
-
-            try {
-
-                // =============================================
-                // FORM DATA
-                // =============================================
-
-                const formData =
-                    new FormData(form);
-
-
-                // =============================================
-                // API ANALYSE
-                // =============================================
-
-                const response =
-                    await fetch(
-
-                        "/api/analyze",
-
-                        {
-
-                            method: "POST",
-
-                            body: formData
-
-                        }
-
-                    );
-
-
-                if (!response.ok) {
-
-                    throw new Error(
-                        "Erreur API"
-                    );
-
-                }
-
-
-                const data =
-                    await response.json();
-
-
-                // =============================================
-                // MATCH
-                // =============================================
-
-                const match =
-                    data.match || {};
-
-
-                const matchOut =
-                    $("matchOut");
-
-
-                if (matchOut) {
-
-                    matchOut.textContent =
-
-                        `${match.home || ""} vs ${match.away || ""}`;
-
-                }
-
-
-                // =============================================
-                // COMPETITION
-                // =============================================
-
-                const competitionOut =
-                    $("competitionOut");
-
-
-                if (competitionOut) {
-
-                    competitionOut.textContent =
-
-                        match.competition
-                        || "";
-
-                }
-
-
-                // =============================================
-                // VERDICT
-                // =============================================
-
-                const verdictOut =
-                    $("verdictOut");
-
-
-                if (verdictOut) {
-
-                    verdictOut.innerHTML =
-
-                        renderVerdict(
-                            data.verdict
-                        );
-
-                }
-
-
-                // =============================================
-                // ANALYSE STATISTIQUE
-                // =============================================
-
-                const analysis =
-                    data.analysis || {};
-
-
-                const analysisOut =
-                    $("analysisOut");
-
-
-                if (analysisOut) {
-
-                    analysisOut.innerHTML = `
-
-                        <pre>${escapeHtml(
-                            JSON.stringify(
-                                analysis,
-                                null,
-                                2
-                            )
-                        )}</pre>
-
-                    `;
-
-                }
-
-
-                // =============================================
-                // RESULTAT
-                // =============================================
-
-                const resultEl =
-                    $("result");
-
-
-                if (resultEl) {
-
-                    resultEl.innerHTML =
-
-                        renderResult(
-                            analysis
-                        );
-
-                }
-
-
-                // =============================================
-                // BUTS
-                // =============================================
-
-                const goalsEl =
-                    $("goals");
-
-
-                if (goalsEl) {
-
-                    goalsEl.innerHTML =
-
-                        renderGoals(
-                            analysis
-                        );
-
-                }
-
-
-                // =============================================
-                // CORNERS
-                // =============================================
-
-                const cornersEl =
-                    $("corners");
-
-
-                if (cornersEl) {
-
-                    cornersEl.innerHTML =
-
-                        renderCorners(
-                            analysis
-                        );
-
-                }
-
-
-                // =============================================
-                // SCORES EXACTS
-                // =============================================
-
-                const scoresEl =
-                    $("scores");
-
-
-                if (scoresEl) {
-
-                    scoresEl.innerHTML =
-
-                        renderScores(
-                            analysis
-                        );
-
-                }
-
-
-                // =============================================
-                // DONNEES ATTENDUES
-                // =============================================
-
-                const expectedEl =
-                    $("expected");
-
-
-                if (expectedEl) {
-
-                    expectedEl.innerHTML =
-
-                        renderExpected(
-                            analysis
-                        );
-
-                }
-
-
-                // =============================================
-                // SOURCES
-                // =============================================
-
-                const sourcesEl =
-                    $("sources");
-
-
-                if (sourcesEl) {
-
-                    sourcesEl.innerHTML =
-
-                        renderSources(
-                            data.sources
-                        );
-
-                }
-
-
-                // =============================================
-                // DISCLAIMER
-                // =============================================
-
-                const disclaimerEl =
-                    $("disclaimer");
-
-
-                if (disclaimerEl) {
-
-                    disclaimerEl.textContent =
-
-                        data.disclaimer
-                        || "";
-
-                }
-
-
-                // =============================================
-                // AFFICHAGE DU RAPPORT
-                // =============================================
-
-                $("report")
-                    ?.classList
-                    .remove("hidden");
-
-
-                $("report")
-                    ?.scrollIntoView({
-
-                        behavior: "smooth",
-
-                        block: "start"
-
-                    });
-
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    error
-                );
-
-
-                alert(
-                    "❌ Impossible d'analyser le match."
-                );
-
-            }
-
-            finally {
-
-                $("loading")
-                    ?.classList
-                    .add("hidden");
-
-            }
-
-        };
-
-}
-
-
-// =========================================================
-// HISTORIQUE
-// =========================================================
-
-const historyBtn =
-    $("historyBtn");
-
-
-if (historyBtn) {
-
-    historyBtn.onclick =
-        async () => {
-
-            try {
-
-                const response =
-                    await fetch(
-                        "/api/history"
-                    );
-
-
-                if (!response.ok) {
-
-                    throw new Error(
-                        "Erreur historique"
-                    );
-
-                }
-
-
-                const data =
-                    await response.json();
-
-
-                const historyEl =
-                    $("history");
-
-
-                if (!historyEl) {
-                    return;
-                }
-
-
-                if (
-
-                    !Array.isArray(data)
-
-                    ||
-
-                    data.length === 0
-
-                ) {
-
-                    historyEl.innerHTML = `
-
-                        <p>
-                            Aucun historique disponible.
-                        </p>
-
-                    `;
-
-                    return;
-
-                }
-
-
-                historyEl.innerHTML =
-
-                    data.map(item => {
-
-
-                        const match =
-                            item.match || {};
-
-
-                        const verdict =
-                            item.verdict || {};
-
-
-                        const prediction =
-                            verdict.main_prediction
-                            || {};
-
-
-                        return `
-
-                            <div class="history-item">
-
-                                <strong>
-
-                                    ${escapeHtml(
-                                        match.home
-                                    )}
-
-                                    vs
-
-                                    ${escapeHtml(
-                                        match.away
-                                    )}
-
-                                </strong>
-
-
-                                <br>
-
-
-                                ${escapeHtml(
-                                    match.competition
-                                    || ""
-                                )}
-
-
-                                <br>
-
-
-                                🏆
-
-
-                                ${escapeHtml(
-
-                                    prediction.label
-
-                                    ||
-
-                                    "Analyse disponible"
-
-                                )}
-
-
-                                <br>
-
-
-                                <small>
-
-                                    ${escapeHtml(
-                                        item.saved_at
-                                        || ""
-                                    )}
-
-                                </small>
-
-                            </div>
-
-                        `;
-
-                    }).join("");
-
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    error
-                );
-
-
-                const historyEl =
-                    $("history");
-
-
-                if (historyEl) {
-
-                    historyEl.innerHTML = `
-
-                        <p>
-                            ❌ Impossible de charger l'historique.
-                        </p>
-
-                    `;
-
-                }
-
-            }
-
-        };
-
-}
+    return payload
