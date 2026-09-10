@@ -1,0 +1,7 @@
+UTILISATION GRATUITE
+
+Ce prototype peut être réutilisé gratuitement en local.
+Les composants, API, marques et fournisseurs externes éventuels restent soumis
+à leurs propres licences et conditions d'utilisation.
+
+Aucune prédiction sportive ne doit être interprétée comme une garantie de gain.

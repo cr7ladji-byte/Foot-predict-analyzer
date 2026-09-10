@@ -1,0 +1,23 @@
+{
+  "name": "FOOT PREDICT ANALYZER",
+  "short_name": "Foot Predict",
+  "description": "Analyse footballistique avec prédictions probabilistes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07131a",
+  "theme_color": "#07131a",
+  "lang": "fr",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
