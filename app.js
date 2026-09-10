@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 
 
 // =========================================================
-// OUTILS
+// SECURITE HTML
 // =========================================================
 
 function escapeHtml(value) {
@@ -17,118 +17,6 @@ function escapeHtml(value) {
 }
 
 
-function formatNumber(value, decimals = 1) {
-
-    const number = Number(value);
-
-    if (!Number.isFinite(number)) {
-        return "0";
-    }
-
-    return number.toFixed(decimals);
-
-}
-
-
-// =========================================================
-// AFFICHAGE DES LIGNES
-// =========================================================
-
-function rows(id, arr) {
-
-    const el = $(id);
-
-    if (!el) {
-        return;
-    }
-
-    if (!Array.isArray(arr)) {
-
-        el.innerHTML = "";
-        return;
-
-    }
-
-
-    el.innerHTML = arr.map(item => {
-
-        if (
-            typeof item === "object"
-            && item !== null
-        ) {
-
-            return `
-                <div class="row">
-                    ${escapeHtml(
-                        JSON.stringify(item)
-                    )}
-                </div>
-            `;
-
-        }
-
-
-        return `
-            <div class="row">
-                ${escapeHtml(item)}
-            </div>
-        `;
-
-    }).join("");
-
-}
-
-
-// =========================================================
-// BARRE DE PROBABILITE
-// =========================================================
-
-function probabilityBar(label, value) {
-
-    const percentage = Math.max(
-        0,
-        Math.min(
-            100,
-            Number(value) || 0
-        )
-    );
-
-
-    return `
-
-        <div class="row">
-
-            <div class="top">
-
-                <span>
-                    ${escapeHtml(label)}
-                </span>
-
-                <strong>
-                    ${formatNumber(
-                        percentage,
-                        1
-                    )}%
-                </strong>
-
-            </div>
-
-            <div class="bar">
-
-                <div
-                    class="fill"
-                    style="width:${percentage}%"
-                ></div>
-
-            </div>
-
-        </div>
-
-    `;
-
-}
-
-
 // =========================================================
 // CREATION CARTE VERDICT
 // =========================================================
@@ -136,12 +24,11 @@ function probabilityBar(label, value) {
 function verdictCard(title, icon, content) {
 
     return `
-
         <div class="verdict-card">
 
             <div class="verdict-title">
 
-                <span>
+                <span class="verdict-icon">
                     ${icon}
                 </span>
 
@@ -151,7 +38,6 @@ function verdictCard(title, icon, content) {
 
             </div>
 
-
             <div class="verdict-content">
 
                 ${content}
@@ -159,20 +45,25 @@ function verdictCard(title, icon, content) {
             </div>
 
         </div>
-
     `;
 
 }
 
 
 // =========================================================
-// AFFICHAGE DU VERDICT
+// AFFICHAGE DU VERDICT INTELLIGENT
 // =========================================================
 
 function renderVerdict(verdict) {
 
     if (!verdict) {
-        return "";
+
+        return `
+            <p>
+                Aucun verdict disponible.
+            </p>
+        `;
+
     }
 
 
@@ -180,7 +71,7 @@ function renderVerdict(verdict) {
 
 
     // =====================================================
-    // PRONOSTIC PRINCIPAL
+    // RECOMMANDATION PRINCIPALE
     // =====================================================
 
     const main =
@@ -206,27 +97,31 @@ function renderVerdict(verdict) {
                 </h3>
 
 
-                <div class="probability">
+                <div class="verdict-stat">
 
                     Confiance :
 
                     <strong>
-                        ${formatNumber(
+
+                        ${escapeHtml(
                             main.confidence
                         )}%
+
                     </strong>
 
                 </div>
 
 
-                <div class="market">
+                <div class="verdict-stat">
 
                     Marché :
 
                     <strong>
+
                         ${escapeHtml(
                             main.market
                         )}
+
                     </strong>
 
                 </div>
@@ -237,15 +132,9 @@ function renderVerdict(verdict) {
 
                 <div class="alternative">
 
-                    Alternative :
-
                     <strong>
-                        ${escapeHtml(
-                            main.alternative
-                        )}
+                        Alternative :
                     </strong>
-
-                    <br>
 
                     ${escapeHtml(
                         main.alternative_label
@@ -283,15 +172,20 @@ function renderVerdict(verdict) {
             `
 
             <h3>
+
                 ${escapeHtml(
                     handicap.label
                 )}
+
             </h3>
 
+
             <p>
+
                 ${escapeHtml(
                     handicap.description
                 )}
+
             </p>
 
             `
@@ -315,20 +209,26 @@ function renderVerdict(verdict) {
 
             "Analyse du match",
 
-            tightness.icon || "⚔️",
+            tightness.icon
+                || "⚔️",
 
             `
 
             <h3>
+
                 ${escapeHtml(
                     tightness.label
                 )}
+
             </h3>
 
+
             <p>
+
                 ${escapeHtml(
                     tightness.description
                 )}
+
             </p>
 
             `
@@ -339,7 +239,7 @@ function renderVerdict(verdict) {
 
 
     // =====================================================
-    // AGRESSIVITE DOMICILE
+    // PROFIL OFFENSIF DOMICILE
     // =====================================================
 
     const homeAggression =
@@ -352,35 +252,41 @@ function renderVerdict(verdict) {
 
             `Profil offensif : ${homeAggression.team}`,
 
-            homeAggression.icon || "🔥",
+            homeAggression.icon
+                || "🔥",
 
             `
 
             <h3>
+
                 ${escapeHtml(
                     homeAggression.label
                 )}
+
             </h3>
 
 
-            <div class="probability">
+            <div class="verdict-stat">
 
                 Intensité offensive :
 
                 <strong>
-                    ${formatNumber(
-                        homeAggression.score,
-                        0
+
+                    ${escapeHtml(
+                        homeAggression.score
                     )}/100
+
                 </strong>
 
             </div>
 
 
             <p>
+
                 ${escapeHtml(
                     homeAggression.description
                 )}
+
             </p>
 
             `
@@ -391,7 +297,7 @@ function renderVerdict(verdict) {
 
 
     // =====================================================
-    // AGRESSIVITE EXTERIEUR
+    // PROFIL OFFENSIF EXTERIEUR
     // =====================================================
 
     const awayAggression =
@@ -404,35 +310,41 @@ function renderVerdict(verdict) {
 
             `Profil offensif : ${awayAggression.team}`,
 
-            awayAggression.icon || "🔥",
+            awayAggression.icon
+                || "🔥",
 
             `
 
             <h3>
+
                 ${escapeHtml(
                     awayAggression.label
                 )}
+
             </h3>
 
 
-            <div class="probability">
+            <div class="verdict-stat">
 
                 Intensité offensive :
 
                 <strong>
-                    ${formatNumber(
-                        awayAggression.score,
-                        0
+
+                    ${escapeHtml(
+                        awayAggression.score
                     )}/100
+
                 </strong>
 
             </div>
 
 
             <p>
+
                 ${escapeHtml(
                     awayAggression.description
                 )}
+
             </p>
 
             `
@@ -443,7 +355,7 @@ function renderVerdict(verdict) {
 
 
     // =====================================================
-    // PREMIER BUT
+    // TIMING DU PREMIER BUT
     // =====================================================
 
     const firstGoal =
@@ -456,20 +368,26 @@ function renderVerdict(verdict) {
 
             "Timing du premier but",
 
-            firstGoal.icon || "⚽",
+            firstGoal.icon
+                || "⚽",
 
             `
 
             <h3>
+
                 ${escapeHtml(
                     firstGoal.label
                 )}
+
             </h3>
 
+
             <p>
+
                 ${escapeHtml(
                     firstGoal.description
                 )}
+
             </p>
 
             `
@@ -479,353 +397,165 @@ function renderVerdict(verdict) {
     }
 
 
-    return html;
-
-}
-
-
-// =========================================================
-// AFFICHAGE RESULTAT 1X2
-// =========================================================
-
-function renderResult(
-    analysis,
-    verdict
-) {
+    // =====================================================
+    // PROBABILITES 1X2
+    // =====================================================
 
     const probabilities =
-        verdict?.probabilities || {};
+        verdict.probabilities;
 
 
-    const home =
-        probabilities.home_win || 0;
+    if (probabilities) {
 
+        html += verdictCard(
 
-    const draw =
-        probabilities.draw || 0;
+            "Probabilités 1X2",
 
+            "📈",
 
-    const away =
-        probabilities.away_win || 0;
+            `
 
+            <div class="probability-grid">
 
-    return `
-
-        ${probabilityBar(
-            "Victoire domicile",
-            home
-        )}
-
-        ${probabilityBar(
-            "Match nul",
-            draw
-        )}
-
-        ${probabilityBar(
-            "Victoire extérieur",
-            away
-        )}
-
-        <hr>
-
-        ${renderVerdict(verdict)}
-
-    `;
-
-}
-
-
-// =========================================================
-// AFFICHAGE BUTS
-// =========================================================
-
-function renderGoals(
-    verdict
-) {
-
-    const goals =
-        verdict?.expected_goals || {};
-
-
-    return `
-
-        <div class="row">
-
-            <div class="top">
-
-                <span>
-                    Buts attendus domicile
-                </span>
-
-                <strong>
-                    ${formatNumber(
-                        goals.home,
-                        2
-                    )}
-                </strong>
-
-            </div>
-
-        </div>
-
-
-        <div class="row">
-
-            <div class="top">
-
-                <span>
-                    Buts attendus extérieur
-                </span>
-
-                <strong>
-                    ${formatNumber(
-                        goals.away,
-                        2
-                    )}
-                </strong>
-
-            </div>
-
-        </div>
-
-
-        <div class="row">
-
-            <div class="top">
-
-                <span>
-                    Total attendu
-                </span>
-
-                <strong>
-                    ${formatNumber(
-                        goals.total,
-                        2
-                    )}
-                </strong>
-
-            </div>
-
-        </div>
-
-    `;
-
-}
-
-
-// =========================================================
-// AFFICHAGE DONNEES GENERALES
-// =========================================================
-
-function renderObject(
-    data
-) {
-
-    if (
-        !data
-        || typeof data !== "object"
-    ) {
-
-        return `
-            <p>
-                Données non disponibles.
-            </p>
-        `;
-
-    }
-
-
-    return Object.entries(data)
-
-        .map(([key, value]) => {
-
-            if (
-                typeof value === "object"
-                && value !== null
-            ) {
-
-                return `
-
-                    <div class="row">
-
-                        <strong>
-                            ${escapeHtml(key)}
-                        </strong>
-
-                        <br>
-
-                        <small>
-                            ${escapeHtml(
-                                JSON.stringify(value)
-                            )}
-                        </small>
-
-                    </div>
-
-                `;
-
-            }
-
-
-            return `
-
-                <div class="row">
-
-                    <div class="top">
-
-                        <span>
-                            ${escapeHtml(key)}
-                        </span>
-
-                        <strong>
-                            ${escapeHtml(value)}
-                        </strong>
-
-                    </div>
-
-                </div>
-
-            `;
-
-        })
-
-        .join("");
-
-}
-
-
-// =========================================================
-// AFFICHAGE SCORES EXACTS
-// =========================================================
-
-function renderScores(
-    analysis
-) {
-
-    if (!analysis) {
-
-        return `
-            <p>
-                Scores non disponibles.
-            </p>
-        `;
-
-    }
-
-
-    const scores =
-        analysis.scores
-        || analysis.exact_scores
-        || analysis.score_predictions
-        || [];
-
-
-    if (!Array.isArray(scores)) {
-
-        return `
-            <p>
-                Scores exacts non disponibles.
-            </p>
-        `;
-
-    }
-
-
-    return scores.map(score => {
-
-        if (
-            typeof score === "object"
-            && score !== null
-        ) {
-
-            const label =
-                score.label
-                || score.score
-                || `${score.home ?? ""}-${score.away ?? ""}`;
-
-
-            const probability =
-                score.probability
-                || score.prob
-                || "";
-
-
-            return `
-
-                <div class="score">
+                <div class="probability-item">
 
                     <span>
-                        ${escapeHtml(label)}
+                        Domicile
                     </span>
 
                     <strong>
-                        ${probability !== ""
-                            ? `${probability}%`
-                            : ""}
+
+                        ${escapeHtml(
+                            probabilities.home_win
+                        )}%
+
                     </strong>
 
                 </div>
 
-            `;
 
-        }
+                <div class="probability-item">
+
+                    <span>
+                        Nul
+                    </span>
+
+                    <strong>
+
+                        ${escapeHtml(
+                            probabilities.draw
+                        )}%
+
+                    </strong>
+
+                </div>
 
 
-        return `
+                <div class="probability-item">
 
-            <div class="score">
+                    <span>
+                        Extérieur
+                    </span>
 
-                ${escapeHtml(score)}
+                    <strong>
+
+                        ${escapeHtml(
+                            probabilities.away_win
+                        )}%
+
+                    </strong>
+
+                </div>
 
             </div>
 
-        `;
+            `
 
-    }).join("");
-
-}
-
-
-// =========================================================
-// AFFICHAGE SOURCES
-// =========================================================
-
-function renderSources(
-    sources
-) {
-
-    if (!Array.isArray(sources)) {
-
-        return `
-            <p>
-                Aucune source.
-            </p>
-        `;
+        );
 
     }
 
 
-    return sources.map(source => `
+    // =====================================================
+    // BUTS ATTENDUS
+    // =====================================================
 
-        <div class="source">
+    const expectedGoals =
+        verdict.expected_goals;
 
-            <strong>
-                ${escapeHtml(
-                    source.name
-                )}
-            </strong>
 
-            <br>
+    if (expectedGoals) {
 
-            <small>
-                ${escapeHtml(
-                    source.status
-                )}
-            </small>
+        html += verdictCard(
 
-        </div>
+            "Buts attendus",
 
-    `).join("");
+            "⚽",
+
+            `
+
+            <div class="probability-grid">
+
+                <div class="probability-item">
+
+                    <span>
+                        Domicile
+                    </span>
+
+                    <strong>
+
+                        ${escapeHtml(
+                            expectedGoals.home
+                        )}
+
+                    </strong>
+
+                </div>
+
+
+                <div class="probability-item">
+
+                    <span>
+                        Extérieur
+                    </span>
+
+                    <strong>
+
+                        ${escapeHtml(
+                            expectedGoals.away
+                        )}
+
+                    </strong>
+
+                </div>
+
+
+                <div class="probability-item">
+
+                    <span>
+                        Total
+                    </span>
+
+                    <strong>
+
+                        ${escapeHtml(
+                            expectedGoals.total
+                        )}
+
+                    </strong>
+
+                </div>
+
+            </div>
+
+            `
+
+        );
+
+    }
+
+
+    return html;
 
 }
 
@@ -843,8 +573,9 @@ if (readBtn) {
     readBtn.onclick =
         async () => {
 
+
             const file =
-                $("file")?.files?.[0];
+                $("file")?.files[0];
 
 
             if (!file) {
@@ -858,6 +589,19 @@ if (readBtn) {
             }
 
 
+            const formData =
+                new FormData();
+
+
+            formData.append(
+
+                "screenshot",
+
+                file
+
+            );
+
+
             const ocrBox =
                 $("ocrBox");
 
@@ -869,19 +613,9 @@ if (readBtn) {
 
 
                 ocrBox.textContent =
-                    "Lecture de la capture...";
+                    "🔎 Lecture de la capture...";
 
             }
-
-
-            const formData =
-                new FormData();
-
-
-            formData.append(
-                "screenshot",
-                file
-            );
 
 
             try {
@@ -915,54 +649,33 @@ if (readBtn) {
                     await response.json();
 
 
-                let content =
-
-                    data.ocr_text
-                    || "Aucun texte détecté.";
-
-
-                if (
-                    Array.isArray(
-                        data.candidate_lines
-                    )
-
-                    &&
-
-                    data.candidate_lines.length > 0
-                ) {
-
-                    content +=
-
-                        "\n\n--- Lignes détectées ---\n\n"
-
-                        +
-
-                        data.candidate_lines.join(
-                            "\n"
-                        );
-
-                }
-
-
                 if (ocrBox) {
 
                     ocrBox.textContent =
-                        content;
+
+                        data.ocr_text
+
+                        ||
+
+                        "Aucun texte détecté.";
 
                 }
+
 
             }
 
             catch (error) {
 
-                console.error(error);
+                console.error(
+                    error
+                );
 
 
                 if (ocrBox) {
 
                     ocrBox.textContent =
 
-                        "Erreur pendant la lecture de la capture.";
+                        "❌ Erreur pendant la lecture.";
 
                 }
 
@@ -984,38 +697,15 @@ const form =
 if (form) {
 
     form.onsubmit =
-        async event => {
+        async (event) => {
+
 
             event.preventDefault();
 
 
-            const home =
-                $("home")?.value.trim();
-
-
-            const away =
-                $("away")?.value.trim();
-
-
-            const competition =
-                $("competition")?.value.trim()
-                || "";
-
-
-            if (!home || !away) {
-
-                alert(
-                    "Indique les deux équipes."
-                );
-
-                return;
-
-            }
-
-
-            // =================================================
-            // LOADING
-            // =================================================
+            // =============================================
+            // AFFICHAGE CHARGEMENT
+            // =============================================
 
             $("loading")
                 ?.classList
@@ -1027,37 +717,22 @@ if (form) {
                 .add("hidden");
 
 
-            // =================================================
-            // DONNEES FORMULAIRE
-            // =================================================
-
-            const formData =
-                new FormData();
-
-
-            formData.append(
-                "home",
-                home
-            );
-
-
-            formData.append(
-                "away",
-                away
-            );
-
-
-            formData.append(
-                "competition",
-                competition
-            );
-
-
             try {
 
-                // =============================================
-                // API ANALYSE
-                // =============================================
+
+                // =========================================
+                // DONNEES FORMULAIRE
+                // =========================================
+
+                const formData =
+                    new FormData(
+                        form
+                    );
+
+
+                // =========================================
+                // APPEL API
+                // =========================================
 
                 const response =
                     await fetch(
@@ -1078,7 +753,7 @@ if (form) {
                 if (!response.ok) {
 
                     throw new Error(
-                        "Erreur API"
+                        "Impossible d'analyser le match."
                     );
 
                 }
@@ -1088,211 +763,501 @@ if (form) {
                     await response.json();
 
 
-                // =============================================
-                // MATCH
-                // =============================================
+                // =========================================
+                // INFORMATIONS MATCH
+                // =========================================
 
                 const match =
-                    data.match || {};
+                    data.match
+                    || {};
 
 
-                if ($("matchOut")) {
+                const matchOut =
+                    $("matchOut");
 
-                    $("matchOut").textContent =
 
-                        `${match.home || home} vs ${match.away || away}`;
+                if (matchOut) {
+
+                    matchOut.textContent =
+
+                        `${match.home || ""}
+                         vs
+                         ${match.away || ""}`;
 
                 }
 
 
-                // =============================================
+                // =========================================
                 // COMPETITION
-                // =============================================
+                // =========================================
 
-                if ($("compOut")) {
+                const competitionOut =
+                    $("competitionOut");
 
-                    $("compOut").textContent =
+
+                if (competitionOut) {
+
+                    competitionOut.textContent =
 
                         match.competition
-                        || competition
-                        || "Compétition non précisée";
+                        || "";
 
                 }
 
 
-                // =============================================
-                // CONFIANCE
-                // =============================================
+                // =========================================
+                // VERDICT INTELLIGENT
+                // =========================================
 
-                const confidence =
-                    data.verdict?.confidence
-                    || 0;
-
-
-                if ($("confidence")) {
-
-                    $("confidence").textContent =
-
-                        `${formatNumber(
-                            confidence,
-                            1
-                        )}%`;
-
-                }
+                const verdictOut =
+                    $("verdictOut");
 
 
-                // =============================================
-                // RESULTAT
-                // =============================================
+                if (verdictOut) {
 
-                if ($("result")) {
+                    verdictOut.innerHTML =
 
-                    $("result").innerHTML =
-
-                        renderResult(
-
-                            data.analysis,
-
+                        renderVerdict(
                             data.verdict
-
                         );
 
                 }
 
 
-                // =============================================
+                // =========================================
+                // ANALYSE STATISTIQUE
+                // =========================================
+
+                const analysis =
+                    data.analysis
+                    || {};
+
+
+                const analysisOut =
+                    $("analysisOut");
+
+
+                if (analysisOut) {
+
+                    analysisOut.innerHTML =
+
+                        `<pre>${escapeHtml(
+                            JSON.stringify(
+                                analysis,
+                                null,
+                                2
+                            )
+                        )}</pre>`;
+
+                }
+
+
+                // =========================================
+                // RESULTAT 1X2
+                // =========================================
+
+                const result =
+                    analysis.result
+                    || {};
+
+
+                const resultEl =
+                    $("result");
+
+
+                if (resultEl) {
+
+                    resultEl.innerHTML = `
+
+                        <div class="row">
+
+                            Victoire domicile :
+
+                            <strong>
+
+                                ${result.home_win ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Match nul :
+
+                            <strong>
+
+                                ${result.draw ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Victoire extérieur :
+
+                            <strong>
+
+                                ${result.away_win ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+                    `;
+
+                }
+
+
+                // =========================================
                 // BUTS
-                // =============================================
+                // =========================================
 
-                if ($("goals")) {
+                const goals =
+                    analysis.goals
+                    || {};
 
-                    $("goals").innerHTML =
 
-                        renderGoals(
-                            data.verdict
-                        );
+                const goalsEl =
+                    $("goals");
+
+
+                if (goalsEl) {
+
+                    goalsEl.innerHTML = `
+
+                        <div class="row">
+
+                            Plus de 1.5 :
+
+                            <strong>
+
+                                ${goals.over_1_5 ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Plus de 2.5 :
+
+                            <strong>
+
+                                ${goals.over_2_5 ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Moins de 3.5 :
+
+                            <strong>
+
+                                ${goals.under_3_5 ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            BTTS Oui :
+
+                            <strong>
+
+                                ${goals.btts_yes ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+                    `;
 
                 }
 
 
-                // =============================================
+                // =========================================
                 // CORNERS
-                // =============================================
+                // =========================================
 
-                if ($("corners")) {
-
-                    const corners =
-
-                        data.analysis?.expected?.corners
-
-                        ||
-
-                        data.analysis?.corners
-
-                        ||
-
-                        data.provider_data?.corners
-
-                        ||
-
-                        null;
+                const corners =
+                    analysis.corners
+                    || {};
 
 
-                    $("corners").innerHTML =
+                const cornersEl =
+                    $("corners");
 
-                        corners
 
-                            ? renderObject(corners)
+                if (cornersEl) {
 
-                            : `
+                    cornersEl.innerHTML = `
 
-                                <p>
-                                    Données corners non disponibles.
-                                </p>
+                        <div class="row">
 
-                            `;
+                            Plus de 7.5 :
+
+                            <strong>
+
+                                ${corners.over_7_5 ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Plus de 8.5 :
+
+                            <strong>
+
+                                ${corners.over_8_5 ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Plus de 9.5 :
+
+                            <strong>
+
+                                ${corners.over_9_5 ?? 0}%
+
+                            </strong>
+
+                        </div>
+
+                    `;
 
                 }
 
 
-                // =============================================
+                // =========================================
                 // SCORES EXACTS
-                // =============================================
+                // =========================================
 
-                if ($("scores")) {
+                const scores =
+                    analysis.exact_scores
+                    || [];
 
-                    $("scores").innerHTML =
 
-                        renderScores(
-                            data.analysis
-                        );
+                const scoresEl =
+                    $("scores");
+
+
+                if (scoresEl) {
+
+                    if (
+                        Array.isArray(scores)
+                        &&
+                        scores.length > 0
+                    ) {
+
+                        scoresEl.innerHTML =
+
+                            scores.map(
+                                item => `
+
+                                <div class="score">
+
+                                    <strong>
+
+                                        ${escapeHtml(
+                                            item.score
+                                        )}
+
+                                    </strong>
+
+
+                                    <span>
+
+                                        ${escapeHtml(
+                                            item.probability
+                                        )}%
+
+                                    </span>
+
+                                </div>
+
+                                `
+                            ).join("");
+
+                    }
+
+                    else {
+
+                        scoresEl.innerHTML =
+
+                            "<p>Aucun score disponible.</p>";
+
+                    }
 
                 }
 
 
-                // =============================================
+                // =========================================
                 // INDICATEURS ATTENDUS
-                // =============================================
+                // =========================================
 
-                if ($("expected")) {
-
-                    const expected =
-
-                        data.analysis?.expected
-
-                        ||
-
-                        data.verdict?.expected_goals
-
-                        ||
-
-                        {};
+                const expected =
+                    analysis.expected
+                    || {};
 
 
-                    $("expected").innerHTML =
+                const expectedEl =
+                    $("expected");
 
-                        renderObject(
-                            expected
-                        );
+
+                if (expectedEl) {
+
+                    expectedEl.innerHTML = `
+
+                        <div class="row">
+
+                            Buts attendus domicile :
+
+                            <strong>
+
+                                ${expected.home_goals ?? 0}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Buts attendus extérieur :
+
+                            <strong>
+
+                                ${expected.away_goals ?? 0}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Total buts attendus :
+
+                            <strong>
+
+                                ${expected.total_goals ?? 0}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div class="row">
+
+                            Total corners attendu :
+
+                            <strong>
+
+                                ${expected.total_corners ?? 0}
+
+                            </strong>
+
+                        </div>
+
+                    `;
 
                 }
 
 
-                // =============================================
+                // =========================================
                 // SOURCES
-                // =============================================
+                // =========================================
 
-                if ($("sources")) {
+                const sources =
+                    data.sources
+                    || [];
 
-                    $("sources").innerHTML =
 
-                        renderSources(
-                            data.sources
-                        );
+                const sourcesEl =
+                    $("sources");
+
+
+                if (sourcesEl) {
+
+                    if (
+                        Array.isArray(
+                            sources
+                        )
+                    ) {
+
+                        sourcesEl.innerHTML =
+
+                            sources.map(
+                                source => `
+
+                                <div class="source">
+
+                                    <strong>
+
+                                        ${escapeHtml(
+                                            source.name
+                                        )}
+
+                                    </strong>
+
+                                    <br>
+
+                                    <small>
+
+                                        ${escapeHtml(
+                                            source.status
+                                        )}
+
+                                    </small>
+
+                                </div>
+
+                                `
+                            ).join("");
+
+                    }
 
                 }
 
 
-                // =============================================
-                // DISCLAIMER
-                // =============================================
+                // =========================================
+                // AVERTISSEMENT
+                // =========================================
 
-                if ($("disclaimer")) {
+                const disclaimer =
+                    $("disclaimer");
 
-                    $("disclaimer").textContent =
+
+                if (disclaimer) {
+
+                    disclaimer.textContent =
 
                         data.disclaimer
-
-                        ||
-
-                        "Les résultats sont des estimations probabilistes et non des garanties.";
+                        || "";
 
                 }
 
 
-                // =============================================
+                // =========================================
                 // AFFICHAGE RAPPORT
-                // =============================================
+                // =========================================
 
                 $("report")
                     ?.classList
@@ -1300,34 +1265,44 @@ if (form) {
 
 
                 $("report")
-                    ?.scrollIntoView({
+                    ?.scrollIntoView(
 
-                        behavior: "smooth",
+                        {
 
-                        block: "start"
+                            behavior:
+                                "smooth"
 
-                    });
+                        }
+
+                    );
+
 
             }
 
             catch (error) {
 
-                console.error(error);
+
+                console.error(
+                    error
+                );
 
 
                 alert(
 
-                    "Impossible d'analyser le match. Vérifie que le serveur FastAPI fonctionne."
+                    "❌ Impossible d'analyser le match. Vérifie que le serveur fonctionne correctement."
 
                 );
+
 
             }
 
             finally {
 
+
                 $("loading")
                     ?.classList
                     .add("hidden");
+
 
             }
 
@@ -1349,6 +1324,7 @@ if (historyBtn) {
     historyBtn.onclick =
         async () => {
 
+
             const historyEl =
                 $("history");
 
@@ -1363,6 +1339,7 @@ if (historyBtn) {
 
 
             try {
+
 
                 const response =
                     await fetch(
@@ -1402,11 +1379,7 @@ if (historyBtn) {
 
                     historyEl.innerHTML =
 
-                        `
-                        <p>
-                            Aucun historique.
-                        </p>
-                        `;
+                        "<p>Aucune analyse enregistrée.</p>";
 
                     return;
 
@@ -1415,131 +1388,110 @@ if (historyBtn) {
 
                 historyEl.innerHTML =
 
-                    data.map(item => {
+                    data.map(
 
-                        const match =
-                            item.match || {};
-
-
-                        const verdict =
-                            item.verdict || {};
+                        item => {
 
 
-                        const prediction =
-                            verdict.main_prediction || {};
+                            const match =
+                                item.match
+                                || {};
 
 
-                        let date =
+                            const verdict =
+                                item.verdict
+                                || {};
 
-                            item.saved_at
-                            || "";
+
+                            const prediction =
+                                verdict.main_prediction
+                                || {};
 
 
-                        try {
+                            return `
 
-                            if (date) {
+                                <div class="history-item">
 
-                                date =
-                                    new Date(
-                                        date
-                                    )
-                                    .toLocaleString(
-                                        "fr-FR"
-                                    );
+                                    <strong>
 
-                            }
+                                        ${escapeHtml(
+                                            match.home
+                                        )}
+
+                                        vs
+
+                                        ${escapeHtml(
+                                            match.away
+                                        )}
+
+                                    </strong>
+
+
+                                    <br>
+
+
+                                    <small>
+
+                                        ${escapeHtml(
+                                            match.competition
+                                            || ""
+                                        )}
+
+                                    </small>
+
+
+                                    <br>
+
+
+                                    🏆
+
+                                    ${escapeHtml(
+
+                                        prediction.label
+
+                                        ||
+
+                                        "Analyse disponible"
+
+                                    )}
+
+
+                                    <br>
+
+
+                                    <small>
+
+                                        ${escapeHtml(
+                                            item.saved_at
+                                            || ""
+                                        )}
+
+                                    </small>
+
+                                </div>
+
+                            `;
 
                         }
 
-                        catch (error) {
+                    ).join("");
 
-                            console.error(error);
-
-                        }
-
-
-                        return `
-
-                            <div class="history-item">
-
-                                <strong>
-
-                                    ${escapeHtml(
-                                        match.home
-                                    )}
-
-                                    vs
-
-                                    ${escapeHtml(
-                                        match.away
-                                    )}
-
-                                </strong>
-
-
-                                <br>
-
-
-                                <small>
-
-                                    ${escapeHtml(
-                                        match.competition
-                                        || ""
-                                    )}
-
-                                </small>
-
-
-                                <br><br>
-
-
-                                🏆
-
-
-                                ${escapeHtml(
-
-                                    prediction.label
-
-                                    ||
-
-                                    "Analyse disponible"
-
-                                )}
-
-
-                                <br>
-
-
-                                <small>
-
-                                    ${escapeHtml(
-                                        date
-                                    )}
-
-                                </small>
-
-                            </div>
-
-                        `;
-
-                    }).join("");
 
             }
 
             catch (error) {
 
-                console.error(error);
+
+                console.error(
+                    error
+                );
 
 
                 if (historyEl) {
 
                     historyEl.innerHTML =
 
-                        `
-                        <p>
-                            Impossible de charger l'historique.
-                        </p>
-                        `;
+                        "❌ Impossible de charger l'historique.";
 
                 }
 
@@ -1548,94 +1500,3 @@ if (historyBtn) {
         };
 
 }
-
-
-// =========================================================
-// PWA / INSTALLATION
-// =========================================================
-
-let deferredPrompt = null;
-
-
-const installBtn =
-    $("installBtn");
-
-
-window.addEventListener(
-
-    "beforeinstallprompt",
-
-    event => {
-
-        event.preventDefault();
-
-
-        deferredPrompt =
-            event;
-
-
-        if (installBtn) {
-
-            installBtn.classList
-                .remove("hidden");
-
-        }
-
-    }
-
-);
-
-
-if (installBtn) {
-
-    installBtn.onclick =
-        async () => {
-
-            if (!deferredPrompt) {
-
-                alert(
-
-                    "Utilise le menu du navigateur puis « Installer l'application » ou « Ajouter à l'écran d'accueil »."
-
-                );
-
-                return;
-
-            }
-
-
-            deferredPrompt.prompt();
-
-
-            await deferredPrompt
-                .userChoice;
-
-
-            deferredPrompt =
-                null;
-
-
-            installBtn.classList
-                .add("hidden");
-
-        };
-
-}
-
-
-window.addEventListener(
-
-    "appinstalled",
-
-    () => {
-
-        if (installBtn) {
-
-            installBtn.classList
-                .add("hidden");
-
-        }
-
-    }
-
-);
