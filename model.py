@@ -7,6 +7,14 @@ import math
 
 def poisson(k, lam):
 
+    try:
+        lam = float(lam)
+    except (TypeError, ValueError):
+        lam = 0
+
+    if lam < 0:
+        lam = 0
+
     return (
         math.exp(-lam)
         * lam ** k
@@ -16,10 +24,33 @@ def poisson(k, lam):
 
 def clamp(x, lo, hi):
 
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        x = lo
+
     return max(
         lo,
         min(hi, x)
     )
+
+
+def get_value(
+    data,
+    key,
+    default=0
+):
+
+    """
+    Récupère une valeur numérique de manière sécurisée.
+    """
+
+    try:
+        return float(
+            data.get(key, default)
+        )
+    except (AttributeError, TypeError, ValueError):
+        return default
 
 
 # =========================================================
@@ -32,6 +63,94 @@ def analyze(
     away: str
 ):
 
+    # =====================================================
+    # SECURITE DES DONNEES
+    # =====================================================
+
+    if not isinstance(data, dict):
+        data = {}
+
+
+    home_attack = get_value(
+        data,
+        "home_attack",
+        1.0
+    )
+
+    away_attack = get_value(
+        data,
+        "away_attack",
+        1.0
+    )
+
+    home_xg = get_value(
+        data,
+        "home_xg",
+        1.0
+    )
+
+    away_xg = get_value(
+        data,
+        "away_xg",
+        1.0
+    )
+
+    home_defense = get_value(
+        data,
+        "home_defense",
+        1.0
+    )
+
+    away_defense = get_value(
+        data,
+        "away_defense",
+        1.0
+    )
+
+    home_form = get_value(
+        data,
+        "home_form",
+        1.0
+    )
+
+    away_form = get_value(
+        data,
+        "away_form",
+        1.0
+    )
+
+    home_absence_impact = clamp(
+        get_value(
+            data,
+            "home_absence_impact",
+            0
+        ),
+        0,
+        0.8
+    )
+
+    away_absence_impact = clamp(
+        get_value(
+            data,
+            "away_absence_impact",
+            0
+        ),
+        0,
+        0.8
+    )
+
+    home_corners = get_value(
+        data,
+        "home_corners",
+        4.5
+    )
+
+    away_corners = get_value(
+        data,
+        "away_corners",
+        4.5
+    )
+
 
     # =====================================================
     # BUTS ATTENDUS DOMICILE
@@ -39,19 +158,19 @@ def analyze(
 
     home_lambda = (
 
-        0.32 * data["home_attack"]
+        0.32 * home_attack
 
         +
 
-        0.26 * data["home_xg"]
+        0.26 * home_xg
 
         +
 
-        0.22 * data["away_defense"]
+        0.22 * away_defense
 
         +
 
-        0.12 * data["home_form"]
+        0.12 * home_form
 
         +
 
@@ -61,7 +180,7 @@ def analyze(
 
         1
         -
-        data["home_absence_impact"]
+        home_absence_impact
 
     )
 
@@ -72,19 +191,19 @@ def analyze(
 
     away_lambda = (
 
-        0.34 * data["away_attack"]
+        0.34 * away_attack
 
         +
 
-        0.27 * data["away_xg"]
+        0.27 * away_xg
 
         +
 
-        0.21 * data["home_defense"]
+        0.21 * home_defense
 
         +
 
-        0.12 * data["away_form"]
+        0.12 * away_form
 
         +
 
@@ -94,26 +213,32 @@ def analyze(
 
         1
         -
-        data["away_absence_impact"]
+        away_absence_impact
 
     )
 
 
     # =====================================================
-    # LIMITES
+    # AVANTAGE DU TERRAIN
+    # =====================================================
+
+    home_lambda *= 1.05
+
+
+    # =====================================================
+    # LIMITES DES BUTS ATTENDUS
     # =====================================================
 
     home_lambda = clamp(
         home_lambda,
         0.35,
-        3.0
+        3.50
     )
-
 
     away_lambda = clamp(
         away_lambda,
         0.25,
-        2.6
+        3.20
     )
 
 
@@ -128,7 +253,7 @@ def analyze(
 
         for a in range(8):
 
-            matrix[(h, a)] = (
+            probability_score = (
 
                 poisson(
                     h,
@@ -143,6 +268,11 @@ def analyze(
                 )
 
             )
+
+
+            matrix[
+                (h, a)
+            ] = probability_score
 
 
     # =====================================================
@@ -190,10 +320,6 @@ def analyze(
 
     # =====================================================
     # NORMALISATION
-    #
-    # La matrice va de 0 à 7 buts.
-    # On normalise les probabilités pour éviter
-    # une somme légèrement différente de 100 %.
     # =====================================================
 
     total_result_probability = (
@@ -231,7 +357,7 @@ def analyze(
 
 
     # =====================================================
-    # TOTAL DE BUTS
+    # TOTAL DE BUTS ATTENDUS
     # =====================================================
 
     total = (
@@ -243,7 +369,9 @@ def analyze(
     )
 
 
-    # Plus de 1,5 buts
+    # =====================================================
+    # OVER 1.5
+    # =====================================================
 
     over15 = (
 
@@ -265,7 +393,9 @@ def analyze(
     )
 
 
-    # Plus de 2,5 buts
+    # =====================================================
+    # OVER 2.5
+    # =====================================================
 
     over25 = (
 
@@ -287,7 +417,9 @@ def analyze(
     )
 
 
-    # Moins de 3,5 buts
+    # =====================================================
+    # UNDER 3.5
+    # =====================================================
 
     under35 = sum(
 
@@ -331,14 +463,14 @@ def analyze(
 
 
     # =====================================================
-    # CORNERS
+    # CORNERS ATTENDUS
     # =====================================================
 
     corner_lambda = clamp(
 
-        data["home_corners"]
+        home_corners
         +
-        data["away_corners"],
+        away_corners,
 
         5.5,
 
@@ -346,6 +478,10 @@ def analyze(
 
     )
 
+
+    # =====================================================
+    # OVER 7.5 CORNERS
+    # =====================================================
 
     over75 = (
 
@@ -367,6 +503,10 @@ def analyze(
     )
 
 
+    # =====================================================
+    # OVER 8.5 CORNERS
+    # =====================================================
+
     over85 = (
 
         1
@@ -386,6 +526,10 @@ def analyze(
 
     )
 
+
+    # =====================================================
+    # OVER 9.5 CORNERS
+    # =====================================================
 
     over95 = (
 
@@ -426,9 +570,9 @@ def analyze(
     # CONFIANCE DU MODELE
     # =====================================================
 
-    source_completeness = 0.58
+    source_completeness = 0.70
 
-    data_confidence = 0.62
+    data_confidence = 0.68
 
 
     confidence = round(
@@ -455,13 +599,9 @@ def analyze(
     return {
 
 
-        # -------------------------------------------------
+        # =================================================
         # PROBABILITES DIRECTES
-        #
-        # IMPORTANT :
-        # Elles sont ici pour être compatibles avec
-        # build_verdict() dans server.py
-        # -------------------------------------------------
+        # =================================================
 
         "home_win":
 
@@ -487,9 +627,9 @@ def analyze(
             ),
 
 
-        # -------------------------------------------------
+        # =================================================
         # RESULTAT 1X2
-        # -------------------------------------------------
+        # =================================================
 
         "result": {
 
@@ -519,9 +659,9 @@ def analyze(
         },
 
 
-        # -------------------------------------------------
+        # =================================================
         # BUTS ATTENDUS
-        # -------------------------------------------------
+        # =================================================
 
         "expected": {
 
@@ -559,9 +699,9 @@ def analyze(
         },
 
 
-        # -------------------------------------------------
+        # =================================================
         # MARCHE DES BUTS
-        # -------------------------------------------------
+        # =================================================
 
         "goals": {
 
@@ -599,9 +739,9 @@ def analyze(
         },
 
 
-        # -------------------------------------------------
+        # =================================================
         # CORNERS
-        # -------------------------------------------------
+        # =================================================
 
         "corners": {
 
@@ -631,9 +771,9 @@ def analyze(
         },
 
 
-        # -------------------------------------------------
+        # =================================================
         # SCORES EXACTS
-        # -------------------------------------------------
+        # =================================================
 
         "exact_scores": [
 
@@ -660,9 +800,9 @@ def analyze(
         ],
 
 
-        # -------------------------------------------------
+        # =================================================
         # CONFIANCE
-        # -------------------------------------------------
+        # =================================================
 
         "confidence":
 
