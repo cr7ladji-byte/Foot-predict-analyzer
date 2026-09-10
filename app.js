@@ -17,6 +17,28 @@ function escapeHtml(value) {
 
 
 // =========================================================
+// NORMALISATION POURCENTAGE
+// =========================================================
+
+function safePercent(value) {
+
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return 0;
+    }
+
+    return Math.max(
+        0,
+        Math.min(
+            100,
+            number
+        )
+    );
+}
+
+
+// =========================================================
 // AFFICHAGE DES LIGNES
 // =========================================================
 
@@ -24,19 +46,25 @@ function rows(id, arr) {
 
     const el = $(id);
 
-    if (!el) return;
+    if (!el) {
+        return;
+    }
 
     if (!Array.isArray(arr)) {
 
         el.innerHTML = "";
-        return;
 
+        return;
     }
 
 
     el.innerHTML = arr.map(item => {
 
-        if (typeof item === "object") {
+        if (
+            item !== null
+            &&
+            typeof item === "object"
+        ) {
 
             return `
                 <div class="row">
@@ -45,7 +73,6 @@ function rows(id, arr) {
                     )}
                 </div>
             `;
-
         }
 
 
@@ -64,7 +91,11 @@ function rows(id, arr) {
 // CREATION CARTE VERDICT
 // =========================================================
 
-function verdictCard(title, icon, content) {
+function verdictCard(
+    title,
+    icon,
+    content
+) {
 
     return `
 
@@ -92,7 +123,6 @@ function verdictCard(title, icon, content) {
         </div>
 
     `;
-
 }
 
 
@@ -103,9 +133,7 @@ function verdictCard(title, icon, content) {
 function renderVerdict(verdict) {
 
     if (!verdict) {
-
         return "";
-
     }
 
 
@@ -116,7 +144,9 @@ function renderVerdict(verdict) {
     // PRONOSTIC PRINCIPAL
     // =====================================================
 
-    const main = verdict.main_prediction;
+    const main =
+        verdict.main_prediction;
+
 
     if (main) {
 
@@ -131,7 +161,9 @@ function renderVerdict(verdict) {
             <div class="verdict-main">
 
                 <h3>
-                    ${escapeHtml(main.label)}
+                    ${escapeHtml(
+                        main.label
+                    )}
                 </h3>
 
 
@@ -140,7 +172,9 @@ function renderVerdict(verdict) {
                     Confiance :
 
                     <strong>
-                        ${escapeHtml(main.confidence)}%
+                        ${escapeHtml(
+                            main.confidence
+                        )}%
                     </strong>
 
                 </div>
@@ -151,7 +185,9 @@ function renderVerdict(verdict) {
                     Marché :
 
                     <strong>
-                        ${escapeHtml(main.market)}
+                        ${escapeHtml(
+                            main.market
+                        )}
                     </strong>
 
                 </div>
@@ -165,7 +201,9 @@ function renderVerdict(verdict) {
                     Alternative :
 
                     <strong>
-                        ${escapeHtml(main.alternative)}
+                        ${escapeHtml(
+                            main.alternative
+                        )}
                     </strong>
 
                     <br>
@@ -188,7 +226,9 @@ function renderVerdict(verdict) {
     // HANDICAP
     // =====================================================
 
-    const handicap = verdict.handicap;
+    const handicap =
+        verdict.handicap;
+
 
     if (handicap) {
 
@@ -203,7 +243,9 @@ function renderVerdict(verdict) {
             `
 
             <h3>
-                ${escapeHtml(handicap.label)}
+                ${escapeHtml(
+                    handicap.label
+                )}
             </h3>
 
             <p>
@@ -222,7 +264,9 @@ function renderVerdict(verdict) {
     // MATCH SERRE
     // =====================================================
 
-    const tightness = verdict.match_tightness;
+    const tightness =
+        verdict.match_tightness;
+
 
     if (tightness) {
 
@@ -235,7 +279,9 @@ function renderVerdict(verdict) {
             `
 
             <h3>
-                ${escapeHtml(tightness.label)}
+                ${escapeHtml(
+                    tightness.label
+                )}
             </h3>
 
             <p>
@@ -257,20 +303,27 @@ function renderVerdict(verdict) {
     const homeAggression =
         verdict.home_aggression;
 
+
     if (homeAggression) {
 
         html += verdictCard(
 
-            `Profil offensif : ${homeAggression.team}`,
+            `Profil offensif : ${
+                escapeHtml(
+                    homeAggression.team
+                )
+            }`,
 
             homeAggression.icon || "🔥",
 
             `
 
             <h3>
+
                 ${escapeHtml(
                     homeAggression.label
                 )}
+
             </h3>
 
 
@@ -310,11 +363,16 @@ function renderVerdict(verdict) {
     const awayAggression =
         verdict.away_aggression;
 
+
     if (awayAggression) {
 
         html += verdictCard(
 
-            `Profil offensif : ${awayAggression.team}`,
+            `Profil offensif : ${
+                escapeHtml(
+                    awayAggression.team
+                )
+            }`,
 
             awayAggression.icon || "🔥",
 
@@ -365,6 +423,7 @@ function renderVerdict(verdict) {
     const firstGoal =
         verdict.first_goal;
 
+
     if (firstGoal) {
 
         html += verdictCard(
@@ -404,6 +463,7 @@ function renderVerdict(verdict) {
 
     const probabilities =
         verdict.probabilities;
+
 
     if (probabilities) {
 
@@ -475,6 +535,7 @@ function renderVerdict(verdict) {
 
     const expectedGoals =
         verdict.expected_goals;
+
 
     if (expectedGoals) {
 
@@ -552,13 +613,30 @@ function renderVerdict(verdict) {
 function renderResult(analysis) {
 
     const result =
-        analysis.result;
+        analysis?.result;
+
 
     if (!result) {
-
         return "";
-
     }
+
+
+    const homeWin =
+        safePercent(
+            result.home_win
+        );
+
+
+    const draw =
+        safePercent(
+            result.draw
+        );
+
+
+    const awayWin =
+        safePercent(
+            result.away_win
+        );
 
 
     return `
@@ -567,10 +645,12 @@ function renderResult(analysis) {
 
             <div class="top">
 
-                <span>Victoire domicile</span>
+                <span>
+                    Victoire domicile
+                </span>
 
                 <strong>
-                    ${escapeHtml(result.home_win)}%
+                    ${homeWin}%
                 </strong>
 
             </div>
@@ -579,7 +659,7 @@ function renderResult(analysis) {
 
                 <div
                     class="fill"
-                    style="width:${result.home_win}%"
+                    style="width:${homeWin}%"
                 ></div>
 
             </div>
@@ -591,10 +671,12 @@ function renderResult(analysis) {
 
             <div class="top">
 
-                <span>Match nul</span>
+                <span>
+                    Match nul
+                </span>
 
                 <strong>
-                    ${escapeHtml(result.draw)}%
+                    ${draw}%
                 </strong>
 
             </div>
@@ -603,7 +685,7 @@ function renderResult(analysis) {
 
                 <div
                     class="fill"
-                    style="width:${result.draw}%"
+                    style="width:${draw}%"
                 ></div>
 
             </div>
@@ -615,10 +697,12 @@ function renderResult(analysis) {
 
             <div class="top">
 
-                <span>Victoire extérieur</span>
+                <span>
+                    Victoire extérieur
+                </span>
 
                 <strong>
-                    ${escapeHtml(result.away_win)}%
+                    ${awayWin}%
                 </strong>
 
             </div>
@@ -627,7 +711,7 @@ function renderResult(analysis) {
 
                 <div
                     class="fill"
-                    style="width:${result.away_win}%"
+                    style="width:${awayWin}%"
                 ></div>
 
             </div>
@@ -646,12 +730,11 @@ function renderResult(analysis) {
 function renderGoals(analysis) {
 
     const goals =
-        analysis.goals;
+        analysis?.goals;
+
 
     if (!goals) {
-
         return "";
-
     }
 
 
@@ -660,7 +743,9 @@ function renderGoals(analysis) {
         <div class="pill">
 
             Over 1.5 :
-            ${escapeHtml(goals.over_1_5)}%
+            ${escapeHtml(
+                goals.over_1_5
+            )}%
 
         </div>
 
@@ -668,7 +753,9 @@ function renderGoals(analysis) {
         <div class="pill">
 
             Over 2.5 :
-            ${escapeHtml(goals.over_2_5)}%
+            ${escapeHtml(
+                goals.over_2_5
+            )}%
 
         </div>
 
@@ -676,7 +763,9 @@ function renderGoals(analysis) {
         <div class="pill">
 
             Under 3.5 :
-            ${escapeHtml(goals.under_3_5)}%
+            ${escapeHtml(
+                goals.under_3_5
+            )}%
 
         </div>
 
@@ -684,7 +773,9 @@ function renderGoals(analysis) {
         <div class="pill">
 
             BTTS Oui :
-            ${escapeHtml(goals.btts_yes)}%
+            ${escapeHtml(
+                goals.btts_yes
+            )}%
 
         </div>
 
@@ -700,12 +791,11 @@ function renderGoals(analysis) {
 function renderCorners(analysis) {
 
     const corners =
-        analysis.corners;
+        analysis?.corners;
+
 
     if (!corners) {
-
         return "";
-
     }
 
 
@@ -714,7 +804,9 @@ function renderCorners(analysis) {
         <div class="pill">
 
             Over 7.5 :
-            ${escapeHtml(corners.over_7_5)}%
+            ${escapeHtml(
+                corners.over_7_5
+            )}%
 
         </div>
 
@@ -722,7 +814,9 @@ function renderCorners(analysis) {
         <div class="pill">
 
             Over 8.5 :
-            ${escapeHtml(corners.over_8_5)}%
+            ${escapeHtml(
+                corners.over_8_5
+            )}%
 
         </div>
 
@@ -730,7 +824,9 @@ function renderCorners(analysis) {
         <div class="pill">
 
             Over 9.5 :
-            ${escapeHtml(corners.over_9_5)}%
+            ${escapeHtml(
+                corners.over_9_5
+            )}%
 
         </div>
 
@@ -746,12 +842,11 @@ function renderCorners(analysis) {
 function renderScores(analysis) {
 
     const scores =
-        analysis.exact_scores;
+        analysis?.exact_scores;
+
 
     if (!Array.isArray(scores)) {
-
         return "";
-
     }
 
 
@@ -790,12 +885,11 @@ function renderScores(analysis) {
 function renderExpected(analysis) {
 
     const expected =
-        analysis.expected;
+        analysis?.expected;
+
 
     if (!expected) {
-
         return "";
-
     }
 
 
@@ -864,9 +958,7 @@ function renderExpected(analysis) {
 function renderSources(sources) {
 
     if (!Array.isArray(sources)) {
-
         return "";
-
     }
 
 
@@ -997,7 +1089,9 @@ if (readBtn) {
 
             catch (error) {
 
-                console.error(error);
+                console.error(
+                    error
+                );
 
 
                 if (ocrBox) {
@@ -1162,17 +1256,13 @@ if (form) {
 
                     analysisOut.innerHTML = `
 
-                        <pre>
-
-${escapeHtml(
-    JSON.stringify(
-        analysis,
-        null,
-        2
-    )
-)}
-
-                        </pre>
+                        <pre>${escapeHtml(
+                            JSON.stringify(
+                                analysis,
+                                null,
+                                2
+                            )
+                        )}</pre>
 
                     `;
 
@@ -1334,13 +1424,13 @@ ${escapeHtml(
 
             catch (error) {
 
-                console.error(error);
+                console.error(
+                    error
+                );
 
 
                 alert(
-
                     "❌ Impossible d'analyser le match."
-
                 );
 
             }
@@ -1397,9 +1487,7 @@ if (historyBtn) {
 
 
                 if (!historyEl) {
-
                     return;
-
                 }
 
 
@@ -1512,7 +1600,9 @@ if (historyBtn) {
 
             catch (error) {
 
-                console.error(error);
+                console.error(
+                    error
+                );
 
 
                 const historyEl =
