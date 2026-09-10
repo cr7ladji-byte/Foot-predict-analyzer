@@ -1,62 +1,197 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FOOT PREDICT ANALYZER — Advanced</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>FOOT PREDICT ANALYZER</title>
+
 <link rel="stylesheet" href="/static/style.css">
 <link rel="manifest" href="/static/manifest.webmanifest">
+
 <meta name="theme-color" content="#07131a">
+
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 </head>
+
 <body>
-<header><div class="logo">⚽ FOOT PREDICT <span>ANALYZER</span></div>
-<nav><button id="installBtn" class="install hidden">📱 Installer l'application</button><span class="navtext">MVP+ • OCR • Données • Modèle • Historique</span></nav></header>
-<main>
-<section class="hero">
-<h1>Analyse avancée d'un match</h1>
-<p>1. Importer une capture • 2. Confirmer le match • 3. Croiser les données autorisées • 4. Calculer les probabilités.</p>
-<div class="steps"><span>📸 Capture</span><span>🔎 Identification</span><span>🌐 Données</span><span>🧮 Probabilités</span></div>
-</section>
 
-<section class="panel">
-<h2>1. Importer la capture</h2>
-<input type="file" id="file" accept="image/*">
-<button id="readBtn">Lire la capture</button>
-<div id="ocrBox" class="hidden"></div>
-</section>
-
-<section class="panel">
-<h2>2. Confirmer les informations</h2>
-<form id="form">
-<div class="formgrid">
-<label>Équipe domicile<input id="home" required placeholder="Ex. Arsenal"></label>
-<label>Équipe extérieur<input id="away" required placeholder="Ex. Tottenham"></label>
-<label class="wide">Compétition<input id="competition" placeholder="Ex. Premier League"></label>
+<header>
+<div class="logo">
+⚽ FOOT PREDICT <span>ANALYZER</span>
 </div>
-<button type="submit">⚡ Lancer l'analyse avancée</button>
-</form>
+
+<nav>
+<button id="installBtn" class="install hidden">
+📱 Installer l'application
+</button>
+
+<span class="navtext">
+MVP+ • OCR • Données • Modèle • Historique
+</span>
+</nav>
+</header>
+
+
+<main>
+
+<section class="hero">
+
+<h1>Analyse intelligente d'un match</h1>
+
+<p>
+Importer une capture, confirmer les équipes et obtenir
+un verdict basé sur les probabilités.
+</p>
+
+<div class="steps">
+<span>📸 Capture</span>
+<span>🔎 Identification</span>
+<span>🧮 Analyse</span>
+<span>🏆 Verdict</span>
+</div>
+
 </section>
 
-<div id="loading" class="hidden loading">Croisement et calcul en cours…</div>
+
+<section class="panel">
+
+<h2>📸 Importer la capture</h2>
+
+<input type="file" id="file" accept="image/*">
+
+<button type="button" id="readBtn">
+🔎 Lire la capture
+</button>
+
+<div id="ocrBox" class="hidden"></div>
+
+</section>
+
+
+<section class="panel">
+
+<h2>⚽ Informations du match</h2>
+
+<form id="form">
+
+<div class="formgrid">
+
+<label>
+Équipe domicile
+<input id="home" name="home" required placeholder="Ex. Arsenal">
+</label>
+
+<label>
+Équipe extérieur
+<input id="away" name="away" required placeholder="Ex. Tottenham">
+</label>
+
+<label class="wide">
+Compétition
+<input id="competition" name="competition" placeholder="Ex. Premier League">
+</label>
+
+</div>
+
+<button type="submit">
+⚡ Lancer l'analyse
+</button>
+
+</form>
+
+</section>
+
+
+<div id="loading" class="hidden loading">
+🧮 Analyse en cours…
+</div>
+
 
 <section id="report" class="hidden">
-<div class="match"><div><small id="compOut"></small><h2 id="matchOut"></h2></div><div class="confidence">Confiance<br><b id="confidence"></b></div></div>
-<div class="cards">
-<div class="card"><h3>🏆 Résultat</h3><div id="result"></div></div>
-<div class="card"><h3>⚽ Buts</h3><div id="goals"></div></div>
-<div class="card"><h3>🚩 Corners</h3><div id="corners"></div></div>
-<div class="card"><h3>🎯 Scores exacts</h3><div id="scores"></div></div>
-<div class="card full"><h3>🧮 Indicateurs attendus</h3><div id="expected"></div></div>
-<div class="card full"><h3>🌐 Architecture des sources</h3><div id="sources"></div></div>
+
+<div class="match">
+
+<div>
+<small id="competitionOut"></small>
+<h2 id="matchOut"></h2>
 </div>
+
+</div>
+
+
+<div class="card full">
+
+<h2>🏆 Verdict intelligent</h2>
+
+<div id="verdictOut"></div>
+
+</div>
+
+
+<div class="card full">
+
+<h3>📊 Analyse statistique</h3>
+
+<div id="analysisOut"></div>
+
+</div>
+
+
+<div class="cards">
+
+<div class="card">
+<h3>🏆 Résultat</h3>
+<div id="result"></div>
+</div>
+
+<div class="card">
+<h3>⚽ Buts</h3>
+<div id="goals"></div>
+</div>
+
+<div class="card">
+<h3>🚩 Corners</h3>
+<div id="corners"></div>
+</div>
+
+<div class="card">
+<h3>🎯 Scores exacts</h3>
+<div id="scores"></div>
+</div>
+
+<div class="card full">
+<h3>🧮 Indicateurs attendus</h3>
+<div id="expected"></div>
+</div>
+
+<div class="card full">
+<h3>🌐 Sources</h3>
+<div id="sources"></div>
+</div>
+
+</div>
+
 <div class="warning" id="disclaimer"></div>
+
 </section>
 
+
 <section class="panel">
-<h2>📚 Historique local</h2>
-<button id="historyBtn">Afficher les dernières analyses</button>
+
+<h2>📚 Historique</h2>
+
+<button type="button" id="historyBtn">
+Afficher les dernières analyses
+</button>
+
 <div id="history"></div>
+
 </section>
+
 </main>
+
 <script src="/static/app.js"></script>
-</body></html>
+
+</body>
+</html>
