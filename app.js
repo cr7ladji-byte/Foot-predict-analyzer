@@ -39,55 +39,6 @@ function safePercent(value) {
 
 
 // =========================================================
-// AFFICHAGE DES LIGNES
-// =========================================================
-
-function rows(id, arr) {
-
-    const el = $(id);
-
-    if (!el) {
-        return;
-    }
-
-    if (!Array.isArray(arr)) {
-
-        el.innerHTML = "";
-
-        return;
-    }
-
-
-    el.innerHTML = arr.map(item => {
-
-        if (
-            item !== null
-            &&
-            typeof item === "object"
-        ) {
-
-            return `
-                <div class="row">
-                    ${escapeHtml(
-                        JSON.stringify(item)
-                    )}
-                </div>
-            `;
-        }
-
-
-        return `
-            <div class="row">
-                ${escapeHtml(item)}
-            </div>
-        `;
-
-    }).join("");
-
-}
-
-
-// =========================================================
 // CREATION CARTE VERDICT
 // =========================================================
 
@@ -483,7 +434,7 @@ function renderVerdict(verdict) {
 
                     <strong>
 
-                        ${escapeHtml(
+                        ${safePercent(
                             probabilities.home_win
                         )}%
 
@@ -498,7 +449,7 @@ function renderVerdict(verdict) {
 
                     <strong>
 
-                        ${escapeHtml(
+                        ${safePercent(
                             probabilities.draw
                         )}%
 
@@ -513,7 +464,7 @@ function renderVerdict(verdict) {
 
                     <strong>
 
-                        ${escapeHtml(
+                        ${safePercent(
                             probabilities.away_win
                         )}%
 
@@ -743,9 +694,7 @@ function renderGoals(analysis) {
         <div class="pill">
 
             Over 1.5 :
-            ${escapeHtml(
-                goals.over_1_5
-            )}%
+            ${safePercent(goals.over_1_5)}%
 
         </div>
 
@@ -753,9 +702,7 @@ function renderGoals(analysis) {
         <div class="pill">
 
             Over 2.5 :
-            ${escapeHtml(
-                goals.over_2_5
-            )}%
+            ${safePercent(goals.over_2_5)}%
 
         </div>
 
@@ -763,9 +710,7 @@ function renderGoals(analysis) {
         <div class="pill">
 
             Under 3.5 :
-            ${escapeHtml(
-                goals.under_3_5
-            )}%
+            ${safePercent(goals.under_3_5)}%
 
         </div>
 
@@ -773,9 +718,7 @@ function renderGoals(analysis) {
         <div class="pill">
 
             BTTS Oui :
-            ${escapeHtml(
-                goals.btts_yes
-            )}%
+            ${safePercent(goals.btts_yes)}%
 
         </div>
 
@@ -804,9 +747,7 @@ function renderCorners(analysis) {
         <div class="pill">
 
             Over 7.5 :
-            ${escapeHtml(
-                corners.over_7_5
-            )}%
+            ${safePercent(corners.over_7_5)}%
 
         </div>
 
@@ -814,9 +755,7 @@ function renderCorners(analysis) {
         <div class="pill">
 
             Over 8.5 :
-            ${escapeHtml(
-                corners.over_8_5
-            )}%
+            ${safePercent(corners.over_8_5)}%
 
         </div>
 
@@ -824,9 +763,7 @@ function renderCorners(analysis) {
         <div class="pill">
 
             Over 9.5 :
-            ${escapeHtml(
-                corners.over_9_5
-            )}%
+            ${safePercent(corners.over_9_5)}%
 
         </div>
 
@@ -855,20 +792,16 @@ function renderScores(analysis) {
         <div class="score">
 
             <strong>
-
                 ${escapeHtml(
                     item.score
                 )}
-
             </strong>
 
 
             <span>
-
-                ${escapeHtml(
+                ${safePercent(
                     item.probability
                 )}%
-
             </span>
 
         </div>
@@ -1089,9 +1022,7 @@ if (readBtn) {
 
             catch (error) {
 
-                console.error(
-                    error
-                );
+                console.error(error);
 
 
                 if (ocrBox) {
@@ -1241,36 +1172,22 @@ if (form) {
 
 
                 // =============================================
-                // ANALYSE STATISTIQUE
+                // DONNEES DE L'ANALYSE
+                // =============================================
+                //
+                // IMPORTANT :
+                // On garde les données pour alimenter
+                // les différentes sections.
+                //
+                // Le JSON brut n'est plus affiché.
                 // =============================================
 
                 const analysis =
                     data.analysis || {};
 
 
-                const analysisOut =
-                    $("analysisOut");
-
-
-                if (analysisOut) {
-
-                    analysisOut.innerHTML = `
-
-                        <pre>${escapeHtml(
-                            JSON.stringify(
-                                analysis,
-                                null,
-                                2
-                            )
-                        )}</pre>
-
-                    `;
-
-                }
-
-
                 // =============================================
-                // RESULTAT
+                // RESULTAT 1X2
                 // =============================================
 
                 const resultEl =
@@ -1424,9 +1341,7 @@ if (form) {
 
             catch (error) {
 
-                console.error(
-                    error
-                );
+                console.error(error);
 
 
                 alert(
@@ -1600,9 +1515,7 @@ if (historyBtn) {
 
             catch (error) {
 
-                console.error(
-                    error
-                );
+                console.error(error);
 
 
                 const historyEl =
