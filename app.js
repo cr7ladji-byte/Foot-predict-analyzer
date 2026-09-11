@@ -1241,32 +1241,78 @@ if (form) {
 
 
                 // =============================================
-                // ANALYSE STATISTIQUE
-                // =============================================
+// ANALYSE STATISTIQUE
+// =============================================
 
-                const analysis =
-                    data.analysis || {};
-
-
-                const analysisOut =
-                    $("analysisOut");
+const analysis =
+    data.analysis || {};
 
 
-                if (analysisOut) {
+const analysisOut =
+    $("analysisOut");
 
-                    analysisOut.innerHTML = `
 
-                        <pre>${escapeHtml(
-                            JSON.stringify(
-                                analysis,
-                                null,
-                                2
-                            )
-                        )}</pre>
+if (analysisOut) {
 
-                    `;
+    analysisOut.innerHTML = `
 
-                }
+        <div class="stat-section">
+
+            <h3>
+                📊 Probabilités du match
+            </h3>
+
+            ${renderResult(analysis)}
+
+        </div>
+
+
+        <div class="stat-section">
+
+            <h3>
+                ⚽ Marchés de buts
+            </h3>
+
+            ${renderGoals(analysis)}
+
+        </div>
+
+
+        <div class="stat-section">
+
+            <h3>
+                🚩 Corners
+            </h3>
+
+            ${renderCorners(analysis)}
+
+        </div>
+
+
+        <div class="stat-section">
+
+            <h3>
+                🎯 Scores exacts probables
+            </h3>
+
+            ${renderScores(analysis)}
+
+        </div>
+
+
+        <div class="stat-section">
+
+            <h3>
+                📈 Données attendues
+            </h3>
+
+            ${renderExpected(analysis)}
+
+        </div>
+
+    `;
+
+}
 
 
                 // =============================================
